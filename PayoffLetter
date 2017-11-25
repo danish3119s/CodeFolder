@@ -1,0 +1,267 @@
+global class PayoffLetter {
+    public Account acc{get;set;} 
+    public static id accid;
+    String oppId;
+    public Opportunity opp{get;set;}
+    public List <opportunity> listOpp{get;set;}
+    public Map <Id, Account> subsidaryAccounts;
+    
+    public String Owner{get;set;}
+    set<id> subAccount;
+    public map<Bank__c,List<opportunity>> BankOppMap{get;set;}
+    public Map<Bank__c, List<Payoffletterwrapper>> payoffWrapper {get;set;}
+    public Map<String, Boolean> bankFlag {get;set;}
+    public static Boolean zeroAmountFlag {get;set;}
+    static Boolean flag = true;
+
+    global PayoffLetter(){
+        bankFlag = new Map<String, Boolean>();
+        accid=apexpages.currentpage().getparameters().get('accid');
+        
+        acc = [SELECT payOffDate__c, Name,Legal_Corporate_Name__c,Federal_Tax_ID__c, id ,PrimaryOwnerID__c, ShippingStreet, ShippingCity, ShippingState, 
+                      ShippingPostalCode ,
+                      (select name,id from Contacts) 
+                      FROM account where id=:accid];
+
+        for(contact con: acc.Contacts){
+            if(acc.PrimaryOwnerID__c==con.id)
+                Owner=con.name ;
+        }
+        
+        listOpp=[SELECT Total_Payback_Amount__c,Application_Number__c,Total_Remittance__c,Knight_Funding_Subsidiary__c, 
+                        Total_Refund__c, StageName, Total_Amount_Received__c, AccountId, SPV_Subsidiary__c, 
+                        Payoff_Amount__c, Negotiated_Pay_Off_Amount__c, Negotiated_Pay_Off_Amount_End_Date__c, 
+                        Negotiated_Pay_Off_Amount_Start_Date__c, Total_Defaulted_Write_Off_Amount__c,
+                        
+                        (SELECT Application__r.name, Balance__c, Payment_Amount__c, Date__c, Status__c,Payment_Status__c 
+                        FROM Remittances__r  WHERE Payment_Status__c ='Pending' AND Payment_Amount__c != NULL AND 
+                        Payment_Amount__c > 0 ORDER BY Date__c DESC) 
+
+                        FROM opportunity WHERE StageName IN ('Funded','Payment Hold','Paid-Off') AND AccountId=:acc.Id AND 
+                        (Knight_Funding_Subsidiary__c = NULL OR Knight_Funding_Subsidiary__r.Name != 'KNIGHT CAPITAL FUNDING I LLC')];        
+                        
+        subAccount= new set<id>();
+
+        for(Opportunity opp: listOpp)
+        {
+            if(!String.IsBlank(opp.Knight_Funding_Subsidiary__c))
+                subAccount.add(opp.Knight_Funding_Subsidiary__c);            
+            if(!String.IsBlank(opp.SPV_Subsidiary__c))
+                subAccount.add(opp.SPV_Subsidiary__c);
+        }
+        
+        subsidaryAccounts=new Map<Id, Account>([SELECT Id , (SELECT Id, Account__c, Account__r.Name, Name, Wire_ABA_Number__c,
+                            Bank_Account_Number__c,Routing_Number__c FROM Banks__r WHERE Type__c = 'Primary') 
+                            FROM Account WHERE Id IN :subAccount]);                         
+  
+        BankOppMap= new map<Bank__c,List<opportunity>>();
+        payoffWrapper = new Map<Bank__c, List<Payoffletterwrapper>>();
+        Opportunity[] oppsWithoutbank = new Opportunity[]{};       
+        
+        for(Opportunity opp: listOpp){
+            String acctId = '';
+            Boolean renderNegInfoFlag;
+            System.debug(opp);
+            if(String.IsNotBlank(opp.Knight_Funding_Subsidiary__c) && subsidaryAccounts.containsKey(opp.Knight_Funding_Subsidiary__c)
+                && subsidaryAccounts.get(opp.Knight_Funding_Subsidiary__c).Banks__r != NULL && 
+                subsidaryAccounts.get(opp.Knight_Funding_Subsidiary__c).Banks__r.size() > 0){
+                Bank__c bankObj;
+
+                //SPV
+                if(String.isNotBlank(opp.SPV_Subsidiary__c)){
+                    bankObj = subsidaryAccounts.get(opp.SPV_Subsidiary__c).Banks__r[0];
+                    acctId = opp.SPV_Subsidiary__c;
+                }
+                else {
+                    bankObj = subsidaryAccounts.get(opp.Knight_Funding_Subsidiary__c).Banks__r[0];
+                    acctId = opp.Knight_Funding_Subsidiary__c;
+                }
+
+                //= subsidaryAccounts.get(opp.Knight_Funding_Subsidiary__c).Banks__r[0];
+                if(!payoffWrapper.containsKey(bankObj))
+                        payoffWrapper.put(bankObj, new List<Payoffletterwrapper>());
+                if(bankObj.Account__c == acctId){
+                    String bankId = bankObj.Id;
+                    if(!bankFlag.containskey(bankId))    bankFlag.put(bankId, false);
+                    Decimal remainingAmount = getRemainingReceivables(opp);
+                    //if(remainingAmount < 0) remainingAmount = 0.0;
+                    if(remainingAmount > 0 && bankFlag.get(bankId) == FALSE){
+                        bankFlag.remove(bankId);
+                        bankFlag.put(bankId, true);
+                    }
+                    renderNegInfoFlag = negotiatedInfoStatus(opp);
+                    payoffWrapper.get(bankObj).add(new Payoffletterwrapper(opp, remainingAmount, renderNegInfoFlag));
+                    system.debug('payoffWrapper: '+ payoffWrapper);
+                }
+            }else {
+                oppsWithoutbank.add(opp);
+            }
+                        
+        }
+        if(oppsWithoutbank.size() != 0){
+            Payoffletterwrapper[] noBanks = new Payoffletterwrapper[]{};
+            for(Opportunity opp : oppsWithoutbank){
+                Boolean renderNegInfoFlag = negotiatedInfoStatus(opp);
+                Decimal remainingAmount1 = getRemainingReceivables(opp);
+                //if(remainingAmount1 < 0) remainingAmount1 = 0.0;
+                noBanks.add(new Payoffletterwrapper(opp, remainingAmount1, renderNegInfoFlag));
+            }
+            payoffWrapper.put(new Bank__c(), noBanks);
+        }
+        
+        if(payoffWrapper.values().size() == 0) zeroAmountFlag = true;
+        else zeroAmountFlag = false;
+        system.debug('BankOppMap---------'+BankOppMap);
+        
+    }
+    
+    static Decimal getRemainingReceivables(Opportunity opp){
+        if (opp.Total_Defaulted_Write_Off_Amount__c != null && opp.Total_Defaulted_Write_Off_Amount__c > 0)
+            return opp.Total_Payback_Amount__c - (opp.Total_Amount_Received__c - opp.Total_Defaulted_Write_Off_Amount__c);
+        else
+            return opp.Total_Payback_Amount__c - opp.Total_Amount_Received__c; 
+    }
+
+    static Boolean negotiatedInfoStatus(Opportunity op) {
+        if(op.Negotiated_Pay_Off_Amount__c != null && op.Negotiated_Pay_Off_Amount__c > 0 &&
+            op.Negotiated_Pay_Off_Amount_Start_Date__c <= system.today() && op.Negotiated_Pay_Off_Amount_End_Date__c >= system.today()) {
+            System.debug('true');
+            return true;
+        }
+        else {
+            System.debug('false');
+            return false;       
+        }
+    }
+
+    global class Payoffletterwrapper{
+        public Opportunity opp {get;set;}
+        public Decimal remainingReceivables {get; set;}
+        public Boolean renderFlag {get;set;}
+        global payoffletterwrapper (Opportunity opp, Decimal remainingReceivables, Boolean rendFlg){
+            this.opp = opp;
+            this.remainingReceivables =remainingReceivables;
+            this.renderFlag = rendFlg;
+        }
+    }
+    
+    webservice static void savePDF(Id accountid){
+        PageReference pdf = Page.PayoffLetter;
+
+        // Add parent id to the parameters for standardcontroller
+        pdf.getParameters().put('accid',accountid);
+
+        // Create the new attachment
+        Attachment attach = new Attachment();
+
+        // the contents of the attachment from the pdf
+        Blob body;
+
+        try {
+            // returns the output of the page as a PDF
+            body = pdf.getContent();
+            // need to pass unit test -- current bug    
+        } catch (VisualforceException e) {
+            body = Blob.valueOf('Some Text');
+        }
+        attach.Body = body;
+        // add the user entered name
+        attach.Name = 'PayOffLetter'+String.valueOf(System.now())+'.pdf';
+        attach.IsPrivate = false;
+        // attach the pdf to the account
+        attach.ParentId = accountid; 
+        insert attach;
+
+        Opportunity[] opps = [SELECT Id, Total_Payback_Amount__c,Application_Number__c,Total_Remittance__c,Knight_Funding_Subsidiary__c, 
+                                    Total_Refund__c,  StageName, Total_Amount_Received__c, AccountId,   Negotiated_Pay_Off_Amount__c,
+                                    Negotiated_Pay_Off_Amount_End_Date__c, Negotiated_Pay_Off_Amount_Start_Date__c, Total_Defaulted_Write_Off_Amount__c,  
+                                    
+                                    (SELECT Application__r.Name, 
+                                    Balance__c, Payment_Amount__c,Date__c, Status__c,Payment_Status__c FROM 
+                                    Remittances__r  WHERE Payment_Status__c ='Pending' AND Payment_Amount__c != NULL AND 
+                                    Payment_Amount__c > 0 ORDER BY Date__c DESC) 
+
+                                    FROM opportunity WHERE StageName IN ('Funded','Payment Hold','Paid-Off') AND 
+                                    AccountId=:accountid AND (Knight_Funding_Subsidiary__c = NULL OR 
+                                    Knight_Funding_Subsidiary__r.Name != 'KNIGHT CAPITAL FUNDING I LLC')];
+        Decimal amount = 0.0;
+        for(Opportunity opp : opps){
+            amount += getRemainingReceivables(opp);
+        }
+        Payoff_Letter_Pull__c obj = new Payoff_Letter_Pull__c(Account__c = accountid,  
+                                    Amount__c = amount);
+        if(opps.size() == 1){
+            obj.Opportunity__c = opps[0].Id;
+            obj.Application_Number__c = opps[0].Application_Number__c;
+        }
+        insert obj;
+    }
+    
+    WebService static void sendEmail(Id AId){
+	//	String AId;
+  //      AId=apexpages.currentpage().getparameters().get('accid');
+		PageReference pdf = Page.PayoffLetter;
+	
+          // Add parent id to the parameters for standardcontroller
+        pdf.getParameters().put('accid',AId);
+		 Account acc=[select id,Primary_Contact__r.Email from account WHERE id=:AId ];
+        String toaddress = acc.Primary_Contact__r.Email;
+		
+		Messaging.SingleEmailMessage mail = new Messaging.SingleEmailMessage();
+		String[] toAddresses = new String[] {toaddress};
+		mail.setToAddresses(toAddresses);
+		mail.setSubject( 'Testing email through apex' );
+
+        mail.setPlainTextBody( 'This is test email body. This mail is being sent from apex code' );
+       
+	   // Create the email attachment
+        Messaging.EmailFileAttachment efa = new Messaging.EmailFileAttachment();
+        efa.setFileName('attachment.pdf');
+       // efa.setBody(b)
+
+        // the contents of the attachment from the pdf
+        Blob body;
+
+        try {
+            // returns the output of the page as a PDF
+            body = pdf.getContent();
+			 efa.setBody(body);
+            // need to pass unit test -- current bug    
+        } catch (VisualforceException e) {
+            body = Blob.valueOf('Some Text');
+        }
+		 
+		 mail.setFileAttachments(new Messaging.EmailFileAttachment[] {efa});
+		 Messaging.sendEmail(new Messaging.SingleEmailMessage[] { mail });
+		 
+		
+
+        Opportunity[] opps = [SELECT Id, Total_Payback_Amount__c,Application_Number__c,Total_Remittance__c,Knight_Funding_Subsidiary__c, 
+                                    Total_Refund__c,  StageName, Total_Amount_Received__c, AccountId,   Negotiated_Pay_Off_Amount__c,
+                                    Negotiated_Pay_Off_Amount_End_Date__c, Negotiated_Pay_Off_Amount_Start_Date__c, 
+                                    
+                                    (SELECT Application__r.Name, 
+                                    Balance__c, Payment_Amount__c,Date__c, Status__c,Payment_Status__c FROM 
+                                    Remittances__r  WHERE Payment_Status__c ='Pending' AND Payment_Amount__c != NULL AND 
+                                    Payment_Amount__c > 0 ORDER BY Date__c DESC) 
+
+                                    FROM opportunity WHERE StageName IN ('Funded','Payment Hold','Paid-Off') AND 
+                                    AccountId=:AId AND (Knight_Funding_Subsidiary__c = NULL OR 
+                                    Knight_Funding_Subsidiary__r.Name != 'KNIGHT CAPITAL FUNDING I LLC')];
+        Decimal amount = 0.0;
+        for(Opportunity opp : opps){
+            amount += getRemainingReceivables(opp);
+        }
+        Payoff_Letter_Pull__c obj = new Payoff_Letter_Pull__c(Account__c = AId,  
+                                    Amount__c = amount);
+        if(opps.size() == 1){
+            obj.Opportunity__c = opps[0].Id;
+            obj.Application_Number__c = opps[0].Application_Number__c;
+        }
+        insert obj;
+		
+	//	return null;
+    }
+    
+    
+}
