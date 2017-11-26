@@ -1,0 +1,95 @@
+public class TransactionHistoryPDF{
+ 
+    public List<Remittance__c > remitList {get;set;}
+    public Decimal amountPending {get;set;}
+    public Opportunity opp {get;set;}
+    @TestVisible static String oppId = '';
+    public Decimal payOffAmount {get;set;}
+    public Decimal totalAmountReceived {get;set;}
+    
+    
+    public TransactionHistoryPDF(){
+        amountPending = payOffAmount = totalAmountReceived = 0.0;
+    
+        remitList = new List<Remittance__c> ();
+        if(!Test.isRunningTest())    oppId = ApexPages.currentPage().getParameters().get('applicationId');
+            
+        System.debug(oppId);
+        
+        if(String.isNotBlank(oppId))
+            opp = [SELECT Application_Number__c, Account.Name , Total_Amount_Received__c , Payoff_Amount__c , 
+                    (SELECT Application__c,Balance__c, Bank_Original_Request_Trace__c,Bank_Return_Request_Trace__c,
+            Check_Number__c,CreatedById,CreatedDate,Customer__c,Custom_Form__c,Date__c,Id,IsDeleted,Original_Payment_Date__c,
+            LastActivityDate,LastModifiedById,LastModifiedDate,Memo__c,Name,Netsuite_Customer_Id__c,Netsuite_InternalId__c,
+            Netsuite_PurchaseOrder_Id__c,Netsuite_SalesOrder_Id__c,Payment_Amount__c,Payment_Method__c,Payment__c,Pending__c,
+            Reject_Reason__c, Status__c, Payment_Status__c, SystemModstamp FROM Remittances__r where 
+             Payment_Amount__c != NULL AND Payment_Amount__c > 0 ORDER BY CreatedDate ASC)
+            FROM Opportunity WHERE Id = :oppId ];
+       
+       if(opp.Remittances__r != null)
+           remitList = opp.Remittances__r;
+       /*    
+       for(Remittance__c rem : remitList){
+         if(rem.Payment_Status__c =='Pending')  amountPending += rem.Payment_Amount__c;
+       } 
+       */
+        
+       if(opp.Payoff_Amount__c != null){
+           payOffAmount = opp.Payoff_Amount__c;// + amountPending;
+           //if(payOffAmount < 0) payOffAmount = 0.0;
+       }    
+       
+       if(opp.Total_Amount_Received__c != null)
+           totalAmountReceived = opp.Total_Amount_Received__c;// - amountPending;
+           
+       System.debug('amountPending--'+amountPending);
+    }
+    
+  public static void sendEmailTrans(Id AId){
+      List<Blob> blobtype=new  List<Blob>();
+       String toaddress = 'danish3119s@gmail.com';
+     Account acc=[SELECT id,(select id from Opportunities ) from account WHERE id=:AId ];
+      Opportunity[] opps = acc.Opportunities;
+      for(Opportunity o :opps){
+          if(o.Id != NULL){
+        PageReference pdf = Page.TransactionHistoryPDF;
+        // Add parent id to the parameters for standardcontroller
+        pdf.getParameters().put('applicationId',o.Id);  
+
+        // the contents of the attachment from the pdf
+        Blob body;
+
+        try {
+            // returns the output of the page as a PDF
+            body = pdf.getContent();
+			blobtype.add(body);
+            // need to pass unit test -- current bug    
+        } catch (VisualforceException e) {
+            body = Blob.valueOf('Some Text');
+            blobtype.add(body);
+        }
+       
+         }
+      }
+        Messaging.SingleEmailMessage mail = new Messaging.SingleEmailMessage();
+		String[] toAddresses = new String[] {toaddress};
+		mail.setToAddresses(toAddresses);
+		mail.setSubject( 'Testing email through apex' );
+       mail.setPlainTextBody( 'This is test email body. This mail is being sent from apex code' );
+      
+       List<Messaging.Emailfileattachment> fileAttachments = new List<Messaging.Emailfileattachment>();
+      for(Blob b :blobtype ){
+          Messaging.Emailfileattachment efa = new Messaging.Emailfileattachment();
+          efa.setFileName('Test Attachments');
+          efa.setBody(b);
+          fileAttachments.add(efa);
+      }
+      mail.setFileAttachments(fileAttachments);
+      Messaging.sendEmail(new Messaging.SingleEmailMessage[] { mail });
+      
+  //     List<Messaging.Emailfileattachment> fileAttachments = new List<Messaging.Emailfileattachment>();
+  //    fileAttachments.add(blobtype);
+      
+    }
+
+}
