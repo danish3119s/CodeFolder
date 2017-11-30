@@ -1,0 +1,289 @@
+// case # 00112202  Defect
+// Case # 00057861
+// Case # 00057861
+// Case # 00059924
+// Case # 00068266 - Once a Renewal lead type reaches 100% the lead application type should update to "Paid Renewal Type"
+// Case # 00078489 - Keep Original Lead Source on All Renewals
+// Case # 00110980 - Not Eligible - Check
+// Case # 00112149 
+public class RenewalLeadOnFunded{
+
+    static String recordId;
+    static Map<String, Integer> renewalSpecialCount;
+    public static String leadType {get;set;}
+    public renewalLeadOnFunded(ApexPages.StandardController stdController){
+        leadType = '';
+        recordId = stdController.getId();
+    }
+
+    public static PageReference parellelLead(){
+        recordId = ApexPages.currentPage().getParameters().get('id');
+        Set<String> agentNames = new Set<String>();
+        System.debug('##leadType'+leadType);
+        /* Modified for opportunity field cleanup - 20170914
+        Opportunity opp = [SELECT Account.Name, Account_Name__c, Agent_Broker_Account_Status__c, Agent_Broker_Account_Name__c, Primary_Owner__c, Name,
+                                  Ownership__c, Agent_Broker__c, Paid_Off_Percentage__c, Account_s_Phone__c, Primary_Owner_Email__c, 
+                                  Account_Business_Type__c, Account_Legal_Corporate_Name__c, Account_Federal_Taxt_Id__c, Account_Years_In_Business__c, 
+                                  Account_Years_In_Business2__c, Account_Industry__c, Account_Billing_Street__c, Account_Billing_City__c, 
+                                  Account_Billing_Zip__C, Account_Billing_State__c, Account_Billing_Country__c, Average_Processing_Volume__c,
+                                  Agent_Broker_Name__c, zPrimaryOwnerEmail__c, Status__c, Account_Status__c, LeadSource, Agent_Broker_Account_Type__c,
+                                  Original_UnderWriter__c, Account.Not_Eligible_for_Renewal__c FROM Opportunity WHERE Id =: recordId]; */
+
+        
+        Opportunity opp = [SELECT Account.Name, Account_Name__c, Agent_Broker_Account_Status__c, Agent_Broker_Account_Name__c, 
+                                  Primary_Owner__c, Name, Agent_Broker__c, Paid_Off_Percentage__c, Account_s_Phone__c, 
+                                  Primary_Owner_Email__c, Account_Business_Type__c, Account_Legal_Corporate_Name__c, 
+                                  Account_Federal_Taxt_Id__c, Account_Years_In_Business__c, Account_Years_In_Business2__c, 
+                                  Account_Industry__c, Account_Billing_Street__c, Account_Billing_City__c, Account_Billing_Zip__C, 
+                                  Account_Billing_State__c, Account_Billing_Country__c, Average_Processing_Volume__c,
+                                  Agent_Broker_Name__c, zPrimaryOwnerEmail__c, Status__c, Account_Status__c, LeadSource, 
+                                  Agent_Broker_Account_Type__c, Original_UnderWriter__c, Account.Not_Eligible_for_Renewal__c 
+                                  FROM Opportunity WHERE Id =: recordId];
+
+        Lead[] oldleads = [SELECT Id FROM Lead WHERE Renewal_App__c = : recordId
+                          		  AND IsConverted = false];
+
+        //Type Not selected
+        if(String.isBlank(leadType) || leadType == '--None--')
+            ApexPages.addMessage(new ApexPages.Message(ApexPages.Severity.ERROR, 'Please select Application Type.'));
+        //Leads Exist
+        else if(oldleads != NULL && oldleads.size() > 0) ApexPages.addMessage(new ApexPages.Message(ApexPages.Severity.ERROR, 'Lead Already Exists. '+oldleads[0].Id));
+        //Not Eligible - Check
+        else if(opp.Account.Not_Eligible_for_Renewal__c)
+            ApexPages.addMessage(new ApexPages.Message(ApexPages.Severity.ERROR, 'Merchant Not Eligible For Renewal.'));
+        //Create New Lead
+        else if(opp.Status__c == 'Active' && opp.Account_Status__c == 'Active'){
+            if(opp.Agent_Broker_Account_Name__c == 'Tiger Funding')
+            agentNames.add(opp.Agent_Broker_Name__c);
+
+            Lead[] leads = createLeads(new Map<Id, Opportunity> {opp.Id => opp}, agentNames, 'Parallel');
+            for(Lead lead : leads){
+                lead.Application_Type__c = leadType;
+                lead.OwnerId = UserInfo.getUserId();
+            }
+            insert leads;
+            return new PageReference('/'+leads[0].Id);
+        }
+        //Status not Active
+        else ApexPages.addMessage(new ApexPages.Message(ApexPages.Severity.ERROR, 'Account and Opportunity Status must be Active.'));
+        
+        return null;
+    }
+
+    public static PageReference cancel(){
+        String oppId = ApexPages.currentPage().getParameters().get('id');
+        return new PageReference('/'+oppId);
+    }
+    //When Paid Off percentage Went above 65
+    public static void paidOffFunded(List<Opportunity> newOpps, Map<Id, Opportunity> oldOpps){
+        Map<Id, Opportunity> oppsForLead = new Map<Id, Opportunity>();
+        Set<String> agentNames = new Set<String>();
+        
+        Set<String> paifOffApps = new Set<String>();
+        Set<String> unPaidOffApps = new Set<String>();
+        
+        for(Opportunity opp : newOpps){
+            
+            if(oldOpps.get(opp.Id).Paid_Off_Percentage__c != opp.Paid_Off_Percentage__c){
+                if(opp.Paid_Off_Percentage__c >= 65 && opp.Status__c == 'Active' && opp.Account_Status__c == 'Active' && 
+                    opp.Not_Eligible_For_Renewal__c == FALSE){
+                    opp.Renewal_Lead__c = true;
+                    oppsForLead.put(opp.Id, opp);
+                    if(opp.Agent_Broker_Account_Name__c == 'Tiger Funding' && 
+                        String.isNotBlank(opp.Agent_Broker_Account_Status__c) && 
+                        opp.Agent_Broker_Account_Status__c != 'InActive')
+                        agentNames.add(opp.Agent_Broker_Name__c);
+                }
+                
+                //Paid Renewal When Paid Off goes to 100
+                if(opp.Paid_Off_Percentage__c >= 100 && oldOpps.get(opp.Id).Paid_Off_Percentage__c < 100)
+                    paifOffApps.add(opp.Id);
+                //Rejection
+                else if(opp.Paid_Off_Percentage__c < 100 && oldOpps.get(opp.Id).Paid_Off_Percentage__c >= 100)
+                    unPaidOffApps.add(opp.Id);
+                    
+            }
+        }
+    
+       if(oppsForLead.size() != 0) upsert createLeads(oppsForLead, agentNames, 'Renewal'); 
+       if(paifOffApps.size() != 0 || unPaidOffApps.size() != 0)  updatePaidOff(paifOffApps, unPaidOffApps);
+    }
+
+    public static Lead[] createLeads(Map<Id, Opportunity> oppsForLead, Set<String> agentNames, String appType){
+        Lead[] leadsToInsert = new Lead[]{};
+        Map<String, String> userName;
+        //Set<String> exisingRenewals = new Set<String>();
+        Map<String, Lead> exisingRenewals = new Map<String, Lead>();
+        
+        for(Lead lead : [SELECT Id , Renewal_App__c, Renewal_App__r.Application_Number__c FROM Lead 
+                            WHERE Renewal_App__c IN: oppsForLead.keySet() AND IsConverted = FALSE]){
+            exisingRenewals.put(lead.Renewal_App__c, lead);
+        }
+        
+        //Agent broker as Owner Id's 
+        if(agentNames.size() != 0)  userName = OutsideBidLeadOnInsideSalesDecline.userNameWithId(agentNames);
+
+        for(Opportunity opp : oppsForLead.values()){
+            if(!exisingRenewals.containsKey(opp.Id)){
+                Lead newLead = getLead(opp);
+                newLead.Application_Type__c = appType; 
+
+                //Owner
+                /*
+                if(String.isNotBlank(opp.Agent_Broker_Account_Name__c ) && opp.Agent_Broker_Account_Name__c == 'Tiger Funding'
+                        && userName != NULL && userName.containsKey(opp.Agent_Broker_Name__c))
+                    newLead.OwnerId = userName.get(opp.Agent_Broker_Name__c);
+                else if(String.isNotBlank(opp.Agent_Broker_Name__c) && opp.Agent_Broker_Name__c == 'Tiger Funding')
+                    newLead.OwnerId = Label.Tiger_Funding_Broker_Owner;
+                //Renewal
+                else{
+                    if(renewalSpecialCount == NULL) renewalUsers();
+                        newLead.OwnerId = ownerWithMinimumCount(); //Label.Default_Customer_Service_Rep;
+                } 
+                */   
+                
+                if(renewalSpecialCount == NULL || renewalSpecialCount.size() == 0)
+                renewalUsers();
+                newLead.OwnerId = ownerWithMinimumCount();
+                
+
+                //Record Type
+                if(opp.Agent_Broker_Account_Name__c == 'Tiger Funding')
+                    newLead.RecordType = new RecordType(Name = 'Lead');
+                else 
+                    newLead.RecordType = new RecordType(Name = 'New Deal');
+
+                //SOFT OFFER
+                if(opp.Average_Processing_Volume__c != Null){
+                    Decimal fundingAmount = ((opp.Average_Processing_Volume__c * .18)*7/ 1.38);
+                    fundingAmount = divisbleBy500(fundingAmount);
+
+                    if(fundingAmount < 5000) fundingAmount = 5000;
+                    else if(fundingAmount > 250000) fundingAmount = 250000;
+
+                    newLead.Soft_Offer__c = fundingAmount.setScale(0);
+                }
+                
+                leadsToInsert.add(newLead);  
+            }
+            else
+                leadsToInsert.add(exisingRenewals.get(opp.Id));
+
+        }
+        
+        return leadsToInsert;
+    }
+
+    @TestVisible
+    static Decimal divisbleBy500(Decimal fundingAmount){
+        Decimal leftOver = Math.mod(Integer.valueOf(fundingAmount), 500) ;
+        if(leftOver > 250) fundingAmount = fundingAmount + (500 - leftOver);
+        else  fundingAmount = fundingAmount - leftOver;
+        return fundingAmount;
+    }
+
+    public static Lead getLead(Opportunity opp){
+        Lead lead = new Lead();
+        if(opp.Primary_Owner__c != null && String.isNotBlank(opp.Primary_Owner__c.subStringBefore(' ').trim())) lead.FirstName = opp.Primary_Owner__c.subStringBefore(' ').trim();
+        if(opp.Primary_Owner__c != null && String.isNotBlank(opp.Primary_Owner__c.subStringAfter(' ').trim())) lead.LastName = opp.Primary_Owner__c.subStringAfter(' ').trim();
+        else lead.LastName = 'UnKnown';
+
+        //lead.Company = opp.Name;
+        lead.Company = opp.Account_Name__c; //RP : 00110768
+        if(opp.Paid_Off_Percentage__c >= 65)    lead.Eligible_For_Renewal__c = TRUE;
+        // lead.Ownership__c = opp.Ownership__c; /* Modified for opportunity field cleanup - 20170914*/
+        if(String.isNotBlank(opp.Agent_Broker_Account_Type__c) && opp.Agent_Broker_Account_Type__c == 'Broker'&&
+             String.isNotBlank(opp.Agent_Broker_Account_Status__c) && opp.Agent_Broker_Account_Status__c != 'InActive')
+            lead.Agent_Broker__c = opp.Agent_Broker__c;
+        else
+            lead.Agent_Broker__c = Label.Default_Broker_Agent;
+        
+        lead.Phone = opp.Account_s_Phone__c;
+        if(String.isNotBlank(opp.Primary_Owner_Email__c))
+            lead.Email = opp.Primary_Owner_Email__c;
+        else if(String.isNotBlank(opp.zPrimaryOwnerEmail__c))
+            lead.Email = opp.zPrimaryOwnerEmail__c;    
+        lead.Application_Type__c = 'Outside Bid';
+        lead.Renewal_App__c = opp.Id;
+        lead.Account__c = opp.AccountId;
+        lead.Business_Type__c = opp.Account_Business_Type__c;
+        lead.Legal_Corporate_Name__c = opp.Account_Legal_Corporate_Name__c;
+        lead.Federal_Tax_ID__c =  opp.Account_Federal_Taxt_Id__c;
+        lead.Years_In_Business__c = opp.Account_Years_In_Business__c;
+        lead.Years_In_Business2__c = opp.Account_Years_In_Business2__c;
+        lead.Industry = opp.Account_Industry__c;
+        lead.Street = opp.Account_Billing_Street__c;
+        lead.City = opp.Account_Billing_City__c;
+        lead.PostalCode = opp.Account_Billing_Zip__C;
+        lead.State = opp.Account_Billing_State__c;
+        lead.Country = opp.Account_Billing_Country__c;
+        if(String.isNotBlank(opp.LeadSource))   lead.LeadSource = opp.LeadSource;
+        else{
+            if(opp.Agent_Broker_Account_Name__c == 'Tiger Funding')
+                lead.LeadSource = 'Tiger Funding';
+            else
+                lead.LeadSource = 'Broker Submission';
+        }
+        return lead;
+    }
+    
+    static void updatePaidOff(Set<String> paifOffApps, Set<String> unPaidOffApps){
+        Lead[] leadsToUpdate = [SELECT Id, Renewal_App__c, Application_Type__c , Renewal_App__r.Paid_Off_Percentage__c FROM Lead 
+                                    WHERE IsConverted = FALSE AND 
+                                    ((Renewal_App__c IN : paifOffApps AND Application_Type__c = 'Renewal')
+                                    OR (Renewal_App__c IN : unPaidOffApps AND Application_Type__c = 'Paid Renewal'))];
+        
+        if(leadsToUpdate != NULL && leadsToUpdate.size() != 0){
+            for(Lead lead : leadsToUpdate){
+                if(lead.Application_Type__c == 'Renewal' && paifOffApps.contains(lead.Renewal_App__c))
+                    lead.Application_Type__c = 'Paid Renewal';
+                else if(lead.Application_Type__c == 'Paid Renewal' && unPaidOffApps.contains(lead.Renewal_App__c))
+                    lead.Application_Type__c = 'Renewal';
+            }
+            
+            update leadsToUpdate;
+        }
+    }
+    
+    static void renewalUsers(){
+        renewalSpecialCount = new Map<String, Integer>();
+
+        for(User user : [SELECT Id FROM User WHERE UserRole.DeveloperName = 'Renewal_Specialist' AND 
+                                IsActive = TRUE AND Absent__c = FALSE]){
+            renewalSpecialCount.put(user.Id, 0);
+        }
+
+        for(AggregateResult agr : [SELECT OwnerId own, Count(Id) cnt FROM Lead  WHERE CreatedDate = TODAY 
+                                    AND OwnerId IN: renewalSpecialCount.keySet() GROUP BY OwnerId]){
+            String ownerId = String.valueOf(agr.get('own'));
+            Integer ownerCount = Integer.valueOf(agr.get('cnt'));
+            
+            if(renewalSpecialCount.containsKey(ownerId)){
+                renewalSpecialCount.remove(ownerId);
+                renewalSpecialCount.put(ownerId, ownerCount);
+            }
+        }
+    }
+
+    static String ownerWithMinimumCount(){
+        String ownerId = '';
+        Integer newCount = 0;
+    
+        for(String strOwner : renewalSpecialCount.keySet()){
+            if(String.isNotBlank(strOwner)){
+                if(String.isBlank(ownerId)){
+                    ownerId = strOwner;
+                    newCount = renewalSpecialCount.get(strOwner);
+                }else if(newCount > renewalSpecialCount.get(strOwner)){
+                    ownerId = strOwner;
+                    newCount = renewalSpecialCount.get(strOwner);
+                }
+            }
+        }
+        newCount += 1;
+        renewalSpecialCount.remove(ownerId);
+        renewalSpecialCount.put(ownerId, newCount);
+        return ownerId;
+    }
+  
+}
