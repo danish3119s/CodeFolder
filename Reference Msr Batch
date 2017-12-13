@@ -1,0 +1,97 @@
+global class BatchMSRAutomationBusinessDays implements Database.Batchable<sObject>,Database.Stateful{
+    global decimal avgVintage;
+    global BatchMSRAutomationBusinessDays(){
+      decimal sumAmountByDay=0.00; 
+      decimal sumAmounts=0.00;
+      avgVintage = 0.00;
+      for(Opportunity AppObj:[select id,StageName,Days__c,Total_Payback_Amount__c,Closedate,Funding_Date__c 
+                      from Opportunity where StageName IN ('Paid-Off','Payment Hold','Funded') 
+                      AND Closedate=THIS_MONTH AND Total_Payback_Amount__c != null AND Days__c != Null]){
+                        system.debug('==='+AppObj);
+        sumAmountByDay += (AppObj.Total_Payback_Amount__c * AppObj.Days__c);
+        sumAmounts += (AppObj.Total_Payback_Amount__c);
+      }
+      avgVintage = sumAmountByDay/sumAmounts;
+    }
+        // Start Method 
+        global Database.QueryLocator start(Database.BatchableContext BC){
+          String query='select id,AccountId__c,Application__r.Last_Payment_Date_Thru_Today__c,Application__r.Last_Payment_Date__c';
+            query +=',Application__r.Accountid,Avg_UW_Days_in_Vintage_Month__c,StageIsNotCancelled__c,Application__r.id,Application__r.StageName';
+            query +=',Application__r.Days__c,Application__r.Total_Payback_Amount__c,Application__r.Closedate,Application__c';
+            query +=',Application__r.Funding_Date__c from Application_Support__c where Application__r.StageName IN (\'Paid-Off\',\'Payment Hold\',\'Funded\')';
+           
+         return Database.getQueryLocator(query);
+        }
+      
+      // Execute Method
+       global void execute(Database.BatchableContext BC, List<Application_Support__c> scope){//MSR_Automation__c
+      List<Application_Support__c> msrUpdateList = new List<Application_Support__c>();
+            
+      set<id> accountids= new set<id>();
+      Datetime fundingdate;
+      Datetime closeDate;
+      Datetime LastPaymentDate;
+      Datetime LastPaymentDateThruToday;
+      Datetime Todays; 
+      BusinessHours bh = [SELECT Id FROM BusinessHours WHERE IsDefault=true];
+          
+      for(Application_Support__c msr:scope){
+        if(msr.Application__r.Closedate!=null){
+            /*fundingdate = datetime.newInstance(msr.Application__r.Funding_Date__c.year(), 
+                          msr.Application__r.Funding_Date__c.month(),msr.Application__r.Funding_Date__c.day());*/
+          closeDate = datetime.newInstance(msr.Application__r.Closedate.year(),
+                         msr.Application__r.Closedate.month(),msr.Application__r.Closedate.day());
+          Date days = BusinessHours.add(System.Label.BusinessHoursId, closeDate, 30*9*60*60*1000).date();
+              msr.Business_days__c =days;
+                    /*long numberof=BusinessHours.diff(Label.BusinessHoursId,fundingdate,closeDate);
+              long x = numberof /(1000 * 60 * 60);
+              Integer days = integer.valueOf(x/8);
+              system.debug('Days==='+days);
+                    system.debug('===apppppp='+msr.Application__c+'======'+msr.Application__r.id);
+              msr.Business_days__c = msr.Application__r.Funding_Date__c + days; 
+           */
+          }
+                if(msr.Application__r.Last_Payment_Date_Thru_Today__c!=null && msr.Application__r.Last_Payment_Date__c!=Null){
+            Todays = datetime.newInstance(Date.today().year(),Date.today().month(),Date.today().day());
+                    
+                    LastPaymentDate = datetime.newInstance(msr.Application__r.Last_Payment_Date__c.year(), 
+                          msr.Application__r.Last_Payment_Date__c.month(),msr.Application__r.Last_Payment_Date__c.day());
+                    
+          LastPaymentDateThruToday = datetime.newInstance(msr.Application__r.Last_Payment_Date_Thru_Today__c.year(), 
+                          msr.Application__r.Last_Payment_Date_Thru_Today__c.month(),msr.Application__r.Last_Payment_Date_Thru_Today__c.day());
+        
+                    long Networkdays1=BusinessHours.diff(Label.BusinessHoursId,LastPaymentDate,Todays);
+                    long  Network1= Networkdays1 /(1000 * 60 * 60);
+              Integer NetworkdaysV1 = integer.valueOf(Network1/8);
+                    msr.NetworkDays_V1__c = NetworkdaysV1+1;//?
+                    
+                    long Networkdays2=BusinessHours.diff(Label.BusinessHoursId,LastPaymentDateThruToday,Todays);
+                    long Network2= Networkdays2 /(1000 * 60 * 60);
+              Integer NetworkdaysV2 = integer.valueOf(Network2/8);
+                    msr.NetworkDays_V2__c = NetworkdaysV2+1;//?
+          }
+                
+          if( (msr.Application__r.StageName=='Funded' || msr.Application__r.StageName=='Paid-Off' || 
+            msr.Application__r.StageName=='Payment Hold') && msr.Application__r.Days__c !=null 
+            && msr.Application__r.Total_Payback_Amount__c !=null && msr.StageIsNotCancelled__c == true){
+            
+            msr.Avg_UW_Days_in_Vintage_Month__c=avgVintage;
+          }
+          msrUpdateList.add(msr);   
+      }
+      if(msrUpdateList.size() > 0){
+        
+        update msrUpdateList; 
+      }
+      
+       }
+        //Finesh Method
+       global void finish(Database.BatchableContext BC){
+            
+       }
+    }
+	
+	
+	
+	============================================================================================
+	This changeset contains Application Support Object and fields BatchClasses:BatchMSRAutomationBusinessDays,BatchMSRAutomationBusinessDaysTest,BatchRemittanceSummaryOnOpportunity, BatchPopulatingApplictionInMSRAutomation,BatchPopulatingApplictionInMSRAutomationTest. Trigger & Class: OpportunityTrigger, StatusCompletionDates
