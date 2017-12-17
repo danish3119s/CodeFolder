@@ -1,0 +1,93 @@
+@isTest
+public class BatchRenewalsTest {
+ @isTest static void testBatchRenewals(){
+        string subAccId = UtilityTest.getSubsidaryAccount();
+        insert UtilityTest.getTriggerExecutionCS();
+        
+        Account acc = new Account(Name = 'Test 123', Primary_Bank_Account__c = '0000034863600',Type='Broker',Status__c='Active',
+                              Primary_Bank_Routing__c = '067006000');
+        insert acc;
+        Contact con = new Contact(Lastname = 'Sample', AccountId = acc.Id);
+        insert con;
+    
+        insert UtilityTest.getBank(acc.Id);
+    
+        Opportunity opp = UtilityTest.getOpportunity(acc.Id);
+        opp.Status__c = 'Active';
+        opp.StageName = 'Funded';
+        opp.Amount=2350;
+        opp.Factor_Rate__c=1;
+        opp.Agent_Broker__c=con.Id;
+        opp.Knight_Funding_Subsidiary__c = subAccId;
+        insert opp;
+     
+       insert UtilityTest.getRemittance(acc.Id,  opp.Id);
+     
+        Lead lead=[SELECT Id , Renewal_App__c,Renewal_App__r.Accountid,CreatedDate,IsConverted  FROM Lead where Renewal_App__c =:opp.Id ];
+       delete lead;
+      String Leadrecordtype = Schema.SObjectType.Lead.getRecordTypeInfosByName().get('Lead').getRecordTypeId();    
+            Lead Convertedlead=UtilityTest.getLead(Leadrecordtype);
+             Convertedlead.Status = 'Open';
+             Convertedlead.Renewal_App__c=opp.id;
+     insert Convertedlead;
+     Database.LeadConvert dl = new Database.LeadConvert();
+// methods that need to be called out
+   dl.setLeadId(Convertedlead.id);
+  
+
+LeadStatus convertStatus = [SELECT Id, MasterLabel FROM LeadStatus WHERE IsConverted=true LIMIT 1];
+dl.setConvertedStatus(convertStatus.MasterLabel);
+   dl.setDoNotCreateOpportunity(true);
+  // dl.setOwnerId(ID);
+   dl.setAccountId(acc.id);
+  // need to pass this instance to convertLead method
+   Database.LeadConvertResult result = Database.convertLead(dl);
+/*     String Leadrecordtype = Schema.SObjectType.Lead.getRecordTypeInfosByName().get('Lead').getRecordTypeId();    
+            Lead Convertedlead=UtilityTest.getLead(Leadrecordtype);
+                 Convertedlead.IsConverted=true;
+                 Convertedlead.Renewal_App__c=opp.id;
+ //                Convertedlead.ConvertedAccountId=acc.id;
+               
+            insert Convertedlead;*/
+      Account ac = new Account(Name = 'Test 123', Primary_Bank_Account__c = '0000034863600',Type='Broker',Status__c='Active',
+                              Primary_Bank_Routing__c = '067006000');
+        insert ac;
+        Contact co = new Contact(Lastname = 'Sample', AccountId = ac.Id);
+        insert co;
+    
+        insert UtilityTest.getBank(ac.Id);
+    
+        Opportunity opp2 = UtilityTest.getOpportunity(ac.Id);
+        opp2.Status__c = 'Active';
+        opp2.StageName = 'Paid-Off';
+       // opp2.Amount=2350;
+        opp2.Paid_Off_Date_Time__c=system.now()-200;
+       // opp2.Factor_Rate__c=1;
+        opp2.Agent_Broker__c=co.Id;
+        opp2.Knight_Funding_Subsidiary__c = subAccId;
+        insert opp2;
+    //   insert UtilityTest.getRemittance(ac.Id,  opp2.Id);
+            Account a = new Account(Name = 'Test 1232', Primary_Bank_Account__c = '0000034863600',Type='Broker',Status__c='Active',
+                              Primary_Bank_Routing__c = '067006000');
+        insert a;
+        Contact c = new Contact(Lastname = 'Samples', AccountId = a.Id);
+        insert c;
+    
+        insert UtilityTest.getBank(a.Id);
+    
+        Opportunity o = UtilityTest.getOpportunity(a.Id);
+        o.Status__c = 'Active';
+        o.StageName = 'Funded';
+        o.Amount=2350;
+        o.Factor_Rate__c=1;
+        o.Agent_Broker__c=c.Id;
+        o.Knight_Funding_Subsidiary__c = subAccId;
+        insert o;
+     
+       insert UtilityTest.getRemittance(a.Id,  o.Id);
+             Test.startTest();
+        Id sId = Database.executeBatch(new BatchRenewals());
+        Test.stopTest();
+  
+    }
+}
