@@ -1,0 +1,103 @@
+// Case# 00112333  
+global class BatchRenewals implements Database.Batchable<sObject> {
+    
+   global Database.QueryLocator start(Database.BatchableContext BC) {
+        // collect the batches of records or objects to be passed to execute
+        String query = 'SELECT Id,Name FROM ';
+               query +='Account where Funded_App_Count__c > 0 AND Status__c = \'Active\'';
+        return Database.getQueryLocator(query);
+    } 
+    global void execute(Database.BatchableContext BC, List<Account> accList) {
+       Date CreationDate;
+       Date paioffdate;
+       Integer NoOFDays;
+        Lead newLead  =new Lead();
+        List<Lead>  LeadList = new List<Lead>();
+        Map<String, Lead> ConvertedLeads =new Map<String, Lead>();
+        Map<String, Lead> exisingRenewals = new Map<String, Lead>();   
+        Set<String> RenewalOpenAppsAId = new Set<String>();
+       
+        Set<String> accountIds = new Set<String>();
+        for(Account acc : accList){
+            accountIds.add(acc.Id);
+        }    
+        if(accountIds.size() > 0){
+            for(Lead lead : [SELECT Id , Renewal_App__c,Renewal_App__r.Accountid,CreatedDate,IsConverted  FROM Lead where Renewal_App__r.Accountid IN: accountIds  ]){
+           // exisingRenewals.put(lead.Renewal_App__c, lead);
+           if(lead.IsConverted == FALSE){
+			  exisingRenewals.put(lead.Renewal_App__c, lead);
+		  }else if(lead.IsConverted == TRUE){
+			   ConvertedLeads.put(lead.Renewal_App__c, lead);
+		  } 		
+        }System.debug('-----------==========================>'+ConvertedLeads);
+            for(Opportunity opp : [SELECT id,type,name,StageName,Accountid  from Opportunity where type='Renewal' AND StageName IN ('Qualified Application', 'Underwriting', 'Missing Documents',
+                                                                                                                                    'Broker Negotiations','Contract Request','Contract Out','Contract In',
+                                                                                                                                    'Verification-Missing Documents','Verification-Pending Approval','Verification') AND Accountid IN: accountIds ] ){
+              RenewalOpenAppsAId.add(opp.Accountid);  
+            }
+            for(Opportunity o :[SELECT id,type,name,StageName,Accountid,Paid_Off_Date_Time__c,Paid_Off_Percentage__c,Account_Name__c,Primary_Owner__c,Agent_Broker_Account_Type__c	  
+                 ,Agent_Broker_Account_Status__c,Agent_Broker__c,Account_s_Phone__c,Primary_Owner_Email__c,zPrimaryOwnerEmail__c 
+                 ,Account_Business_Type__c,Account_Legal_Corporate_Name__c,Account_Federal_Taxt_Id__c,Account_Years_In_Business__c,
+                  Account_Years_In_Business2__c,Account_Industry__c,Account_Billing_Street__c,Account_Billing_City__c,
+                  Account_Billing_Zip__C,Account_Billing_State__c,Account_Billing_Country__c,LeadSource,Agent_Broker_Account_Name__c              
+                                from Opportunity Where StageName IN ('Funded', 'Paid-Off') And Accountid IN: accountIds ]){
+	if ((o.StageName == 'Funded' || o.StageName == 'Paid-Off')&& o.Paid_Off_Percentage__c >=90 && o.Type !='Renewal' ){
+		if(!exisingRenewals.containsKey(o.Id)){
+			if(!RenewalOpenAppsAId.contains(o.Accountid)){
+				//Our lead creation logic
+			    newLead= RenewalLeadOnFunded.getLead(o);
+                LeadList.add(newLead);
+		 	}
+		}
+	}else if(o.StageName == 'Paid-Off'){
+		paioffdate=o.Paid_Off_Date_Time__c.date();
+        NoOFDays = paioffdate.daysBetween(System.today());
+		if((NoOFDays==90 || NoOFDays>90 ) && !exisingRenewals.containsKey(o.Id) && !RenewalOpenAppsAId.contains(o.Accountid) && o.Type !='Renewal' ){
+			//Our lead creation logic
+			newLead= RenewalLeadOnFunded.getLead(o);
+            LeadList.add(newLead);
+		}
+	}else if(ConvertedLeads.containsKey(o.Id)){
+       CreationDate=(ConvertedLeads.get(o.Id).CreatedDate).date();
+       NoOFDays = CreationDate.daysBetween(System.today()); 
+        if((NoOFDays==90 || NoOFDays>90 )&& !exisingRenewals.containsKey(o.Id) && !RenewalOpenAppsAId.contains(o.Accountid) && o.Type !='Renewal' ){
+            //Our lead creation logic
+            newLead=RenewalLeadOnFunded.getLead(o);
+            LeadList.add(newLead);
+        }
+    }
+}            if(LeadList.size() > 0){ upsert LeadList; }		
+            
+        }
+        
+    }
+    global void finish(Database.BatchableContext BC) {
+        // execute any post-processing operations
+  }
+/*     public static Lead getLead(Opportunity opp){
+        Lead lead = new Lead();
+        if(opp.Primary_Owner__c != null && String.isNotBlank(opp.Primary_Owner__c.subStringBefore(' ').trim())) lead.FirstName = opp.Primary_Owner__c.subStringBefore(' ').trim();
+        if(opp.Primary_Owner__c != null && String.isNotBlank(opp.Primary_Owner__c.subStringAfter(' ').trim())) lead.LastName = opp.Primary_Owner__c.subStringAfter(' ').trim();
+        else lead.LastName = 'UnKnown';
+        
+        lead.Company = opp.Account_Name__c; 
+        if(opp.Paid_Off_Percentage__c >= 65)    lead.Eligible_For_Renewal__c = TRUE;
+       
+        if(String.isNotBlank(opp.Agent_Broker_Account_Type__c) && opp.Agent_Broker_Account_Type__c == 'Broker'&&
+             String.isNotBlank(opp.Agent_Broker_Account_Status__c) && opp.Agent_Broker_Account_Status__c != 'InActive')
+            lead.Agent_Broker__c = opp.Agent_Broker__c;
+        else
+            lead.Agent_Broker__c = '003q000000fwCmI';//Label.Default_Broker_Agent; is not available in Dev08 
+        
+        lead.Phone = opp.Account_s_Phone__c;
+    //    if(String.isNotBlank(opp.Primary_Owner_Email__c))
+    //        lead.Email = opp.Primary_Owner_Email__c;
+    //    else if(String.isNotBlank(opp.zPrimaryOwnerEmail__c))
+         //   lead.Email = opp.zPrimaryOwnerEmail__c;    
+        lead.Application_Type__c = 'Outside Bid';
+        lead.Renewal_App__c = opp.Id;
+        lead.Account__c = opp.AccountId;
+        lead.Status='Open';
+        return lead;
+    }*/
+}
