@@ -1,0 +1,227 @@
+<?php
+//error_reporting(E_ALL);
+//ini_set('display_errors', 1);
+//ini_set('max_execution_time', 0);
+//set_time_limit(0);
+
+
+require_once ('config/mysql.class.php');
+extract($_POST);
+    function ReplaceChar($text){
+    	$what=array("$","<b>","</b>","&amp;","*",",","<i>","</i>","&nbsp;","(",")");
+    	$which=array("","","","and","","","","","");
+    	$text=str_replace($what,$which,$text);
+    	return $text;
+    }
+    
+    function ReplaceChar1($text){
+	    $what=array("$","<b>","</b>","&amp;","*",",","<i>","</i>","&nbsp;","#");
+    	$which=array("","","","and","","","",""," ","");
+    	$text=str_replace($what,$which,$text);
+    	return $text;
+    }
+
+    function deleteDir($dirPath) {
+        if (!is_dir($dirPath)) {
+            throw new InvalidArgumentException("$dirPath must be a directory");
+        }
+        if (substr($dirPath, strlen($dirPath) - 1, 1) != '/') {
+            $dirPath .= '/';
+        }
+        $files = scandir($dirPath); 
+        foreach ($files as $file) {
+            if ($file === '.' || $file === '..') continue;
+            if (is_dir($dirPath.$file)) {
+                deleteDir($dirPath.$file);
+            } else {
+                if ($dirPath.$file !== __FILE__) {
+                    unlink($dirPath.$file);
+                }
+            }
+        }
+        rmdir($dirPath);
+    }
+    
+	if($_GET["attachmentid"]!=""){
+	    
+	    require_once('SendRespToSalesforce.php');
+    // 	define("USERNAME", "sandeep.kumar@ibusinesssoftware.in.full");
+    // 	define("PASSWORD", "Sandysandy@24091991");
+    // 	define("SECURITY_TOKEN", "lFVlZXSR57YMlAAmRIox7yALV");
+    // 	define("USERNAME", "kishore@knightcapitalfunding.com");
+    // 	define("PASSWORD", "Upkar678");
+    // 	define("SECURITY_TOKEN", "FqJT7yDOpOS9KmgShnuxKLTH0");
+    // 	//define("USERNAME", "sandeep.kumar@ibusinesssoftware.in.dev02");
+    // 	//define("PASSWORD", "Sandy@24091991");
+    // 	//define("SECURITY_TOKEN", "xB6YhRXbB1K6H0EGfi7KMgzV9");
+    // 	require_once ('../soapclient/SforceEnterpriseClient.php');
+    // 	ini_set("../soap.wsdl_cache_enabled", "0");
+    // 	$mySforceConnection = new SforceEnterpriseClient();
+    // 	$mySforceConnection->createConnection("../soapclient/enterprise.wsdl.xml");
+    // 	$mySforceConnection->setEndpoint('https://login.salesforce.com/services/Soap/c/32.0');
+    // 	$mySforceConnection->login(USERNAME, PASSWORD.SECURITY_TOKEN);
+    	
+    // 	define("USERNAME", "kishore@knightcapitalfunding.com");
+    //     define("PASSWORD", "Upkar678");
+    //     define("SECURITY_TOKEN", "FqJT7yDOpOS9KmgShnuxKLTH0");
+        
+        define("USERNAME", "rakesh.patel@knightcapitalfunding.com");
+        define("PASSWORD", "test12345!@");
+        define("SECURITY_TOKEN", "YFp5M1EYtbTQ28BbxmeaYtp0");
+        require_once ('../soapclient/SforceEnterpriseClient.php');
+        ini_set("soap.wsdl_cache_enabled", "0");
+        $mySforceConnection = new SforceEnterpriseClient();
+        $mySforceConnection->createConnection("../soapclient/enterprise.wsdl.xml");
+        $mySforceConnection->setEndpoint('https://login.salesforce.com/services/Soap/c/32.0');
+        $mySforceConnection->login(USERNAME, PASSWORD.SECURITY_TOKEN);
+	    
+	
+    	$attachmentid=$_GET["attachmentid"];
+    	
+		$path="sizingscoringfiles/".$attachmentid;
+		if (!file_exists($path)){
+			mkdir($path, 0777, true);
+		}
+		
+		$querysoql="SELECT Id,Name,body FROM Attachment WHERE id = '".$attachmentid."'";
+		$resultsoql=$mySforceConnection->query($querysoql);
+		
+		$records=$resultsoql->records;
+		
+        $NewRe=$resultsoql->records;
+		$FRecordN=$NewRe[0]->Name;
+		$FRecordB=$NewRe[0]->Body;
+		
+		if(!empty($FRecordB)){
+		    $completepath=$path."/"."attachment";
+			file_put_contents($completepath,$FRecordB);	           
+		}
+        ob_start();
+        $source_pdf=$completepath;
+        //print_r($path."\n");
+        //print_r($completepath."\n");
+    	$output_folder=$path;
+    	if (!file_exists($output_folder)) { mkdir($output_folder, 0777, true);}
+    	$a= passthru("pdftohtml $source_pdf $output_folder/new_file_name",$b);
+        //var_dump($a);
+    	ob_end_clean();
+
+    	$path=$path."/new_file_names.html";
+    	$myfile = fopen($path, "r") or die("Unable to open file!");
+    	$text= fread($myfile,filesize($path));
+        //print_r($text);die();
+        //$BankName="chase";
+        preg_match("/(?<=PAGE 1)(.*?)(?=<A name=2>)/s",$text,$findmatch);
+        //echo $text;
+        if(!empty($findmatch)){
+            if(strpos(strtolower($findmatch[0]),"capital one")!== false){
+                $text='www.capitalonebank.com'.$text;
+            }
+        }
+    	if(strpos($text,"bankofamerica.com")!== false){
+    	    $text=str_replace("&nbsp;"," ",$text);
+	    	$text=ReplaceChar(preg_replace('/\s+/',' ',$text));
+	    	//print_r($text);
+    	    if((strpos($text,"Your Business")!== false) || (strpos($text,"Your Full Analysis")!== false)){
+        		include "bankofamerica.php";
+        		$ChaseBank=new BankOfAmericaBank();
+        		$DataFinalBOA=$ChaseBank->GetDataOFAllMonth($text);	
+        		print_r(json_encode($DataFinalBOA));
+    	    }else{
+    	        echo json_encode(array("status"=>"error","reason"=>"file cannot be processed"));
+    	    }
+    	}elseif(strpos($text,"BBT.com")!== false){
+	    	$text=ReplaceChar1(preg_replace('/\s+/',' ',$text));
+    	    if(strpos($text,"Your account")!== false || strpos($text,"Your consolidated statement")!== false){
+        		include "BBandT.php";
+    			$BBandT=new BBandT();
+    			$DataBBandT=$BBandT->GetDataOFAllMonth($text);
+    			print_r(json_encode($DataBBandT));
+    	    }else{
+    	        echo json_encode(array("status"=>"error","reason"=>"file cannot be processed"));
+    	    }
+    	}elseif(strpos($text,"JPMorgan Chase")!== false){
+	    	$text=ReplaceChar(preg_replace('/\s+/',' ',$text));
+	    	if(strpos($text,"CHECKING SUMMARY")!== false){
+        		include "chase.php";
+        		$ChaseBank=new ChaseBank();
+        		$DataFinal=$ChaseBank->GetDataOFAllMonth($text);	
+        		print_r(json_encode($DataFinal));
+    	    }else{
+    	        echo json_encode(array("status"=>"error","reason"=>"file cannot be processed"));
+    	    }
+    	}elseif(strpos($text,"With&nbsp;Regions!")!== false){
+    	    $text=str_replace("&nbsp;"," ",$text);
+	    	$text=ReplaceChar(preg_replace('/\s+/',' ',$text));
+            if(strpos($text,"Beginning Balance")!== false){
+        		include "regionbank.php";
+        		$RegionsBank=new RegionsBank();
+        		$DataTD=$RegionsBank->GetDataOFAllMonth($text);	
+        		print_r(json_encode($DataTD));
+    	    }else{
+    	        echo json_encode(array("status"=>"error","reason"=>"file cannot be processed"));
+    	    }
+    	}elseif(strpos($text,"navyfederal.org")!== false){
+	    	$text=ReplaceChar1(preg_replace('/\s+/',' ',$text));
+            if(strpos($text,"Summary of your deposit accounts")!== false){
+        		include "navyfederal.php";
+        		$navyfederal=new NavyFederalBank();
+        		$DataNavyfederal=$navyfederal->GetDataOFAllMonth($text);
+        		print_r(json_encode($DataNavyfederal));
+    	    }else{
+    	        echo json_encode(array("status"=>"error","reason"=>"file cannot be processed"));
+    	    }
+//    	}elseif(strpos($text,"www.capitalonebank.com")!== false || strpos($text,"Capital One")!== false){
+    	}elseif(strpos($text,"www.capitalonebank.com")!== false){
+
+	    	
+	    	$text=ReplaceChar1(preg_replace('/\s+/',' ',$text));
+    	    if(strpos($text,"ACCOUNT SUMMARY")!== false){
+        		include "capital.php";
+    			$Capital=new Capital();
+    			$DataCapital=$Capital->GetDataOFAllMonth($text);
+    			print_r(json_encode($DataCapital));
+    	    }else{
+    	        
+    	        echo json_encode(array("status"=>"error","reason"=>"file cannot be processed"));
+    	    }
+    	    
+    	}elseif(strpos($text,"wellsfargo.com")!== false && strpos($text,"Analyzed Business Checking")!== false ){
+        	$text=ReplaceChar1(preg_replace('/\s+/',' ',$text));
+	   	    if(strpos($text,"Account summary")!== false ){
+    	        include "wellsfargo.php";
+    			$Wellsfargo=new Wellsfargo();
+    			$DataWellsfargo=$Wellsfargo->GetDataOFAllMonth($text);
+      			print_r(json_encode($DataWellsfargo));
+    	    }else{
+    	        echo json_encode(array("status"=>"error","reason"=>"file cannot be processed"));
+    	    }
+    	}elseif(strpos($text,"wellsfargo.com")!== false){
+    	    //print_r("http://18.216.151.89/wellsfargostructure2.php?attachmentid='".$_GET["attachmentid"]);
+    	    
+    	    $DataWellsfargo=file_get_contents('http://18.216.151.89/wellsfargostructure2.php?attachmentid='.$_GET["attachmentid"].'&type=sizingandscoring');
+    	    print_r($DataWellsfargo);
+    	    
+    	}else{
+    	    echo json_encode(array("status"=>"error","reason"=>"file cannot be processed No Bank Matched"));
+    	}
+    	//die();
+    	//echo $text;
+    	//SendResponseToSalesforce();
+    	/*
+    	elseif(strpos($text,"www.tdbank.com")!== false){
+	    	$text=ReplaceChar1(preg_replace('/\s+/',' ',$text));
+	    	//print_r($text);
+    	    if(strpos($text,"TD Business")!== false || strpos($text,"Business Convenience")!== false || strpos($text,"TD Commercial")!== false || strpos($text,"TD Relationship")!== false){
+        		include "TDBank.php";
+    			$TDBank=new TDBank();
+    			$DataFinalTD=$TDBank->GetDataOFAllMonth($text);
+    			print_r(json_encode($DataFinalTD));
+    	    }else{
+    	        echo json_encode(array("status"=>"error","reason"=>"file cannot be processed"));
+    	    }
+    	}*/
+    	deleteDir('sizingscoringfiles/'.$_GET["attachmentid"]);
+    	
+	}
+?>
