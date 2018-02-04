@@ -1,0 +1,273 @@
+<?php
+class TwitterClass{
+        public function Authentication(){
+        	//$connection = new TwitterOAuth(CONSUMER_KEY, CONSUMER_SECRET, $access_token, $access_token_secret);
+
+        	//$connection=new TwitterOAuth("uk5YhhDw9DaQIGyLVr9xFzZsZ","2pKMiIBlfrYzLnYE7JR49rjucMJ2wL8q0zmLINle5tuKQHWHqu","371010810-bdx5SHGfJq9hnsU0QFmKqKVW6OLj5Uh3l0oJfWf5","4yT5bLqRn46oeK6GxTSjaa4pw5zJxCbSDCWE3E9DXlumz");
+        	$connection = new TwitterOAuth("4PgEa1AYu4XOW0CvSaBv5NAFO","jGPOUypKtzrLBuVivGnJw1ZqYnjhBTVENkzhcYtB9Mon01lM4Z","3013552939-IeAnqLhUhLRIngRlC2jp1pE2wqdnP6B3QYuId96","fcGdjKSK4J55SvfjExvf48rH5PG4vq6QC3AxIUrBiJqJ4");
+        	return $connection;
+        }
+
+        public function GetTheDataFromTwitter($url){
+			$agent= 'Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1; SV1; .NET CLR 1.0.3705; .NET CLR 1.1.4322)';
+			$curl = curl_init();
+			curl_setopt($curl, CURLOPT_USERAGENT, $agent);
+			curl_setopt($curl, CURLOPT_URL, $url);
+			curl_setopt($curl, CURLOPT_FOLLOWLOCATION, TRUE);
+			curl_setopt($curl, CURLOPT_AUTOREFERER, TRUE);
+			curl_setopt($curl, CURLOPT_VERBOSE, TRUE);
+			curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, FALSE);
+			curl_setopt($curl, CURLOPT_RETURNTRANSFER, TRUE);
+			$result = curl_exec($curl);
+			curl_close($curl);
+			return $result;
+	    }
+
+        public function TwitterScrap($screen_name,$tweet_id){
+        	$url="https://twitter.com/".$screen_name."/status/".$tweet_id;//822327270580723712";
+        	$Reply=$this->GetTheDataFromTwitter($url);
+        	
+        	$Reply=preg_replace('/\s+/', ' ',$Reply);
+			preg_match('~<div class="timeline replies[^>]*>(.*?)</table> </div>~si',$Reply,$OnlyReplies);
+			
+			if(!empty($OnlyReplies[0])){
+			   preg_match_all('~<table [^>]*>(.*?)</table>~si',$OnlyReplies[0],$table);
+			   $A=array();
+			   $Repl=0;
+			   foreach($table[0] as $table1){
+				preg_match('~<div class="username[^>]*>(.*?)</div>~si',$table1,$userinfo);
+				preg_match('~<td class="timestamp[^>]*>(.*?)</td>~si',$table1,$timestamp);
+				preg_match('~<tr class="tweet-container"[^>]*>(.*?)</tr>~si',$table1,$tweet);
+				$username  = str_replace("<span>@</span>","",$userinfo[1]);
+				$timestamp = date("m-d",strtotime(strip_tags($timestamp[1])));
+				$comment   = $this->backslashreplacer(trim(strip_tags($tweet[1])));
+				
+				$A[$Repl]['username']=$username;
+				$A[$Repl]['timestamp ']=$timestamp;
+				$A[$Repl]['comment']=$comment;
+				$Repl++;
+			   }
+			   
+			   return $A;
+			}else{
+			   return ""; //array(array("Comment"=>"No Comments"));
+			}
+			
+        }
+
+	    public function TwitterWrap($AccountName=null,$LegalName=null,$BillingStreet=null,$BillingCity=null,$BillingState=null,$BillingPostalCode=null,$PhysicalStreet=null,$PhysicalCity=null,$PhysicalState=null,$PhysicalPostalCode=null){	    	
+    		$SearchClass=new SearchClass();
+    		
+    		if(!empty($_GET['SocialDataURL'])){
+    		    $link=$_GET['SocialDataURL'];
+    		    if(strpos($link, '?') !== false){
+    		        $SubString=substr($link, 0, strpos($link, "?"));    
+    		    }else{
+    		        $SubString=$link;
+    		    }
+    		}else{
+    			$resp=$SearchClass->SearchForId($AccountName,$LegalName,$BillingStreet,$BillingCity,$BillingState,$BillingPostalCode,$PhysicalStreet,$PhysicalCity,$PhysicalState,$PhysicalPostalCode,"twitter");
+            	//print_r($resp);die();
+            	if(empty($resp))return '{"TWITTERURL":"","TwitterTitlePercentage":"0","TwitterLocationPercentage":"0","TwitterMatchingSource":"TWITTER","Status":"Failed","accIdAppId":"'.$_GET['accountId'].','.$_GET['appId'].'"}';
+            	$link=$resp[0];
+            	$SentName=$resp[1];
+            	$SentLocation=$resp[2];
+            	if(strpos($link, '?') !== false){
+            		$SubString=substr($link, 0, strpos($link, "?"));	
+            	}else{
+            		$SubString=$link;
+            	}
+    		}
+    	    //print_r($SubString);die();
+		    $id=str_replace("twitter.com/","",strstr($SubString, 'twitter.com/'));
+		    
+        	//print_r($link."link \n");
+        	//print_r($id."id \n");die();
+        	$connection=$this->Authentication();
+            //print_r($connection);die();
+        	if(!empty($id)){
+        		$SearchApi = $connection->get("https://api.twitter.com/1.1/users/search.json?page=1&q=$id");        		
+        		$SentName=$LegalName;
+        		$SentLocation=$BillingStreet.$BillingCity.$BillingState.$BillingPostalCode;
+        		//print_r($SearchApi);die();
+        	}else{
+				$SearchApi = $connection->get("https://api.twitter.com/1.1/users/search.json?page=1&q=$LegalName&location=$location");
+				$SentName=$LegalName;
+				//print_r($SearchApi);die();
+				if((empty($SearchApi)) || ($SearchApi=="[]")){
+					$SentName=$AccountName;
+					$SearchApi = $connection->get("https://api.twitter.com/1.1/users/search.json?page=1&q=$AccountName&location=$location");
+				}else{ 
+				   // print_r($_GET);die();
+					return '{"TWITTERURL":"","TwitterTitlePercentage":"0","TwitterLocationPercentage":"0","TwitterMatchingSource":"TWITTER","Status":"Failed","accIdAppId":"'.$_GET['accountId'].','.$_GET['appId'].'"}';
+				}
+        	}
+        	//print_r($SearchApi);die();
+        	$TwitterMatch=json_decode($SearchApi);
+
+			if(!empty($TwitterMatch[0]->screen_name)){
+				$screen_name=$TwitterMatch[0]->screen_name;
+				$ReceivedName=$TwitterMatch[0]->name;
+				$ReceivedLocation=$TwitterMatch[0]->location;
+				similar_text(strtolower($ReceivedName),strtolower($SentName),$NamePercent);
+				similar_text(strtolower($ReceivedLocation),strtolower($SentLocation),$LocationPercent);
+				$AverageMatch=($NamePercent+$LocationPercent)/2;
+				//print_r($ReceivedName."\n");
+				//print_r($SentName."\n");
+				
+				//print_r($ReceivedLocation."\n");
+				//print_r($SentLocation."\n");
+				
+				//print_r($NamePercent."\n");
+			//	print_r($LocationPercent."\n");print_r($_GET['accountId']);print_r($_GET['appId']);die();
+                if(empty($_GET['SocialDataURL'])){
+    				if($NamePercent<55 || $LocationPercent<55){
+    			$retyrnsome='{"TWITTERURL":"'.$resp[0].'","TwitterTitlePercentage":"'.$NamePercent.'","TwitterLocationPercentage":"'.$LocationPercent.'","Status":"Success","TwitterMatchingSource":"'.$resp[3].'","accIdAppId":"'.$_GET['accountId'].','.$_GET['appId'].'"}';					
+    			
+    			//	$retyrnsome='{"TwitterData":{"TwitterDetails":{"TwitterTweetsInfo":[{"created_at":"01-26-2018","tweet":"RT @business: Whats in store for the global economy in 2018? Carney, Kuroda and Lagarde discuss #WEF18 https:  t.co onUWW7wgZ2"},{"created_at":"01-26-2018","tweet":"We are currently hiring a Fund Accountant to join our team in Dublin. Interested candidates, apply now!\u2026 https:  t.co oAHrOdDW3s"},{"created_at":"01-26-2018","tweet":"Happy Australia Day to all our Aussie clients and contacts #AustraliaDay2018 #connected #globalbusiness https:  t.co nT97fteBz8"},{"created_at":"01-25-2018","tweet":"#WeAreHiring an IT Service Desk Manager to join our team in Dublin. For a full job description and to apply, click\u2026 https:  t.co epsRSQJKwR"},{"created_at":"01-25-2018","tweet":"A great turnout for the roundtable discussion on our latest fund admin landscape white paper with BakerHostetler. S\u2026 https:  t.co zLEdz8WdLJ","Comments":[{"username":" joerileyhudson ","timestamp ":"01-25","comment":"Replying to @ApexFundService    Well Done APEX!!!! TY, joe"}]},{"created_at":"01-24-2018","tweet":"@kkasbarian Thanks - an ever evolving topic!"},{"created_at":"01-24-2018","tweet":"We are hiring a Senior Corporate Officer to join our team in Luxembourg. Click here for a full job description and\u2026 https:  t.co t3HUzng8wK"},{"created_at":"01-24-2018","tweet":"Our latest blog examins how big data is changing the face of the asset management industry. Take a look:\u2026 https:  t.co 3M0n7c6Yds"},{"created_at":"01-23-2018","tweet":"We are currently recruiting the following roles for our office in Luxembourg:\n1. Transfer Agency -Transfer Agency T\u2026 https:  t.co i2cJDAYQFN"},{"created_at":"01-23-2018","tweet":"Only one week left for the Real Deals Mid Market 2018 conference! Apex is pleased to be sponsoring and speaking at\u2026 https:  t.co k9GRpOrg9t"},{"created_at":"01-22-2018","tweet":"We are recruiting a Business Implementation Administrator for any one of the following locations: Charlotte, Atlant\u2026 https:  t.co r2ExwAOF1X"},{"created_at":"01-19-2018","tweet":"This morning we are hosting a roundtable to discuss our recent Fund Admin Landscape whitepaper with @BakerHostetler\u2026 https:  t.co dAsiEYAI1z"},{"created_at":"01-19-2018","tweet":"Some of our Middle East management team got together for brainstorming and dinner this month - placing value on our\u2026 https:  t.co Di8OyC69pH"},{"created_at":"01-19-2018","tweet":"We are pleased to announce that we have been shortlisted in the category Best Fund Administrator-Overall\u201d at the M\u2026 https:  t.co ySvsHp1KaC"},{"created_at":"01-19-2018","tweet":"We are pleased to sponsor the MENA Fund Manager Services Awards 2018 in Dubai on 30th January. Interested to attend\u2026 https:  t.co rHP4RuefeH"},{"created_at":"01-17-2018","tweet":"RT @ConnectLeaves: A good read on why major #cryptocurrencies are going through a severe price correction. #FinTech #digitalcurrency  https\u2026"},{"created_at":"01-16-2018","tweet":"Join us at the @RealDealsEU Mid Market 2018 event, the only event dedicated to Europe\u2019s mid-market. Paul Spendiff,\u2026 https:  t.co AuwcQHmGka"},{"created_at":"01-15-2018","tweet":"RT @SLTjustin: The Securities and Futures Commission (SFC) of Hong Kong has proposed additional safeguards on the use of securities lending\u2026"},{"created_at":"01-15-2018","tweet":"RT @globalcustodian: , @ApexFundService begins New Year with acquisition of Luxembourg-based asset servicer https:  t.co b8dcXO6th3"},{"created_at":"01-15-2018","tweet":"We are hiring a Compliance Officer for our office in Hong Kong. Apply now: https:  t.co le5Nq1OyK3 #wearehiring\u2026 https:  t.co LbcD3iFBr5"},{"created_at":"01-12-2018","tweet":"RT @ADGlobalMarket: #ADGMReglab is glad to have 16 firms in its current cohort & aims to do more to develop & grow its #fintech ecosystem &\u2026"},{"created_at":"01-10-2018","tweet":"Our Cork Office has moved! #wehavemoved #corkireland https:  t.co M25VHAgJdX"},{"created_at":"01-10-2018","tweet":"You are invited! Apex and @BakerHostetler are hosting an interactive panel led discussion to explore the current st\u2026 https:  t.co k9j4cbeNNc"},{"created_at":"01-09-2018","tweet":"RT @ADGlobalMarket: ADGM and Bahrain Economic Development Board sign region\u2019s first MENA #FinTech agreement \n\nhttps:  t.co JEhqWaJ4xs https\u2026"},{"created_at":"01-09-2018","tweet":"RT @PEWireNews: Apex acquires M M Warburg & Co\u2019s Asset Management and Servicing Business in Luxembourg https:  t.co rAsDyrqUyg"},{"created_at":"01-09-2018","tweet":"RT @chrisdulux: #Luxembourg Times - Luxembourg - Bermuda-based #fund administrator Apex Group snaps up Luxembourg firms https:  t.co bZ9uJZ\u2026"},{"created_at":"01-09-2018","tweet":"RT @BTreeCEO: #Fintech Regulation: Congress eyes fresh guidelines for new technology https:  t.co ai1VIINUcm Industry research needed to st\u2026"},{"created_at":"01-09-2018","tweet":"RT @pensionsnews: Apex Fund Services to buy M.M. Warburg asset servicing business in latest acquisition https:  t.co Ius0plrxTz"},{"created_at":"01-08-2018","tweet":"RT @cwselector: .@UBS AM launches gender equality Ucits ETF - @terria_williams reports https:  t.co K3JUcm6Dfg"},{"created_at":"01-08-2018","tweet":"Apex continues to climb up the administrator rankings with third acquisition in six months, the latest being M.M.Wa\u2026 https:  t.co j0s2f8zNol"},{"created_at":"01-08-2018","tweet":"RT @IrishAngels: Where are smart money #VCs investing in #FinTech? @CBinsights shares a market map. https:  t.co R1uH2RtZOY https:  t.co \u2026"},{"created_at":"01-08-2018","tweet":"We are currently seeking to hire a Company Secretarial Assistant to join our team in Dublin, Ireland. follow the li\u2026 https:  t.co LYQ1TbFOTS"},{"created_at":"01-04-2018","tweet":"RT @ValaAfshar: 13 technologies of next decade:\n\n1 #AI (ML DL NLP)\n2 #IoT\u231a\ufe0f\n3 #blockchain \u26d3\n4 3D printing \ud83d\udda8\n5 mobile\ud83d\udcf1\n6 autonomous cars \ud83d\ude97\n7\u2026"},{"created_at":"01-04-2018","tweet":"RT @markets: Fintech. Blockchain. Weed. This startup hits the trifecta https:  t.co H7ig6zhJ7Z https:  t.co nsmRiqCwUf"},{"created_at":"01-04-2018","tweet":"RT @ENVCrager: Should advisors be concerned about possible regulations coming for #fintech and #robos this year? @ThinkAdvisor reports regu\u2026"},{"created_at":"01-04-2018","tweet":"RT @MikeQuindazzi: Top Industries for #AI by 2030?\n1-#HealthCare\n2-#Automotive \n3-#FinServ \n(#IoT #healthtech #fintech #insurtech) https:  \u2026"},{"created_at":"01-04-2018","tweet":"Lets talk about Big Data - already an intrinsic part of our social lives & now changing the face of asset manageme\u2026 https:  t.co kXJ7sHNrBD"},{"created_at":"01-04-2018","tweet":"You are very welcome, Apex UK is delighted to be supporting local London youth. Happy New Year! #localyouth\u2026 https:  t.co AUBM1kujHx"},{"created_at":"12-22-2017","tweet":"Apex UK gets into the Christmas spirit with a bake sale. All proceeds going to support @UrbanHopeN1\u2026 https:  t.co e4DkshilTw"},{"created_at":"12-20-2017","tweet":"Apex Singapore had a fun Christmas Party in the office last Friday. Sending our twitter family lots of festive chee\u2026 https:  t.co M6VsirpOZZ"},{"created_at":"12-19-2017","tweet":"The Mauritius end of year party this year had a masquerade theme. Great to see the team looking so glamorous. https:  t.co BqUf8OhjIR"},{"created_at":"12-18-2017","tweet":"The Apex UK team mixing it up with a Mexican twist to their festive celebrations this year. https:  t.co NofDDZrfcF","Comments":[{"username":" joerileyhudson ","timestamp ":"12-18","comment":"Replying to @ApexFundService    Mr. Hughes & Company enjoy your well earned celebration in Good Health, Prosperity and Best Wishes Always!!!&#10;&#10;Best,&#10;&#10;joe"}]},{"created_at":"12-15-2017","tweet":"Some of our Charlotte office getting into the Holiday spirit with their festive sweaters #holidayseason https:  t.co zPc6WVx9JL"},{"created_at":"12-15-2017","tweet":"RT @UrbanHopeN1: Thank you so much to the two wonderful volunteers from @ApexFundService and everyone else who helped to make sure last nig\u2026"},{"created_at":"12-15-2017","tweet":"Apex hires ex-Sapia Partners Director, Daniel Maycock who joins us as European Sales Associate Director\u2026 https:  t.co VjajrEBiKF"},{"created_at":"12-13-2017","tweet":"We are recruiting for two positions to join our team in Dublin:\n- Senior Business Analyst\n- Head of Software Develo\u2026 https:  t.co mn0Q1FdjkL"},{"created_at":"12-12-2017","tweet":"We are currently seeking a Business Analyst Consultant to work in a customer facing role in Malta, Ireland or Canad\u2026 https:  t.co Suiiyf6HPf"},{"created_at":"12-08-2017","tweet":"We are looking to hire a Junior Fund Accountant to join our team in Luxembourg. Follow the link for the full job\u2026 https:  t.co FJqFptL66d"},{"created_at":"12-08-2017","tweet":"With the help of lighthouse cohort and in coordination with Smart Distribution, Apex Middle East helped out with th\u2026 https:  t.co o8dGVbu25S"},{"created_at":"12-04-2017","tweet":"Craig Roberts, Regional Managing Director for Apex MENA and Avinash Gungadoo Managing Director for Apex Bahrain, ar\u2026 https:  t.co 8WYwbQj6lo"},{"created_at":"12-04-2017","tweet":"Matias Gaitan, Managing Director for Apex Uruguay is currently attending the 9th Annual Private Equity Brazil & Lat\u2026 https:  t.co dil5vxc5IE"},{"created_at":"12-01-2017","tweet":"Apex Malta hosted its annual Corporate Drinks Reception yesterday at the Quarterdeck Bar, Hilton. We wish to thank\u2026 https:  t.co sR9E1tAQg8"},{"created_at":"12-01-2017","tweet":"Daniel Strachman, Head of Business Development for Apex North America, on the panel at the @globalcustodian session\u2026 https:  t.co q4kuHbuZ3V"},{"created_at":"12-01-2017","tweet":"FXI has launched the Hedge fund Valor Global FX https:  t.co EHmZQdCWnT via @CisionSverige"},{"created_at":"12-01-2017","tweet":"We are currently seeking to hire a Receptionist Administrative Assistant for our office in Cork. Please follow the\u2026 https:  t.co oMEz1ViyHT"},{"created_at":"11-30-2017","tweet":"Voting is now open for the @globalcustodian Industry Person of the year. Vote for Peter Hughes now at\u2026 https:  t.co aRgWobilEz"},{"created_at":"11-30-2017","tweet":"RT @globalcustodian: VOTING IS NOW LIVE for our Industry Person of the Year award #gcIPOTY go to https:  t.co jcVQSJFZXn to cast your vote\u2026"},{"created_at":"11-30-2017","tweet":"Apex will be participating in @globalcustodians Panel Sessions in New York City later today. Daniel Strachman, Ape\u2026 https:  t.co aSiT8hPHNR"},{"created_at":"11-28-2017","tweet":"We had a great event in Abu Dhabi this morning for our launch in the @ADGlobalMarket Thank you to everyone who atte\u2026 https:  t.co v8tmck1eCr"},{"created_at":"11-28-2017","tweet":"@rohitghai Thank you Rohit. Much appreciated."},{"created_at":"11-28-2017","tweet":"RT @ADGlobalMarket: #Financial industry experts from #ADGM & @ApexFundService exchanging insights into the changing landscape of investment\u2026"},{"created_at":"11-28-2017","tweet":"RT @rohitghai: At the launch of the @ApexFundService #ADGM office in #AbuDhabi thus becoming the 1st #fund #administrator in this #IFC...Ma\u2026"},{"created_at":"11-28-2017","tweet":"RT @ADGlobalMarket: Today marks the launch of another important member institution to the ADGM family - @ApexFundService, one of the first\u2026"},{"created_at":"11-28-2017","tweet":"RT @ADGlobalMarket: \u0646\u0634\u0647\u062f \u0627\u0644\u064a\u0648\u0645 \u0627\u0646\u0636\u0645\u0627\u0645 \u0648\u0627\u062d\u062f\u0629 \u0645\u0646 \u0623\u0639\u0631\u0642 \u0627\u0644\u0645\u0624\u0633\u0633\u0627\u062a \u0627\u0644\u0645\u0627\u0644\u064a\u0629 \u0625\u0644\u0649 \u0639\u0627\u0626\u0644\u0629 \u0633\u0648\u0642 \u0623\u0628\u0648\u0638\u0628\u064a \u0627\u0644\u0639\u0627\u0644\u0645\u064a @ApexFundService \u0627\u0644\u0645\u0631\u062e\u0635\u0629 \u0631\u0633\u0645\u064a\u0627 \u0644\u062a\u0646\u0641\u064a\u0630 \u0627\u0644\u0646\u2026"},{"created_at":"11-28-2017","tweet":"RT @rohitghai: The panel discussion at the #ADGM launch of @ApexFundService in #AbuDhabi...@ADGlobalMarket https:  t.co jT6zT8jiGQ"},{"created_at":"11-28-2017","tweet":"RT @ADGlobalMarket: @wailum_kwok,\u00a0Capital Markets Executive Director, #FSRA of #ADGM, at the launch of @ApexFundService in ADGM welcoming i\u2026"},{"created_at":"11-28-2017","tweet":"Venki Subramanian, Managing Director Apex Abu Dhabi, Craig Roberts, Regional Managing Director Apex MENA and Glyn G\u2026 https:  t.co sKxHH04ZyU"},{"created_at":"11-23-2017","tweet":"Extremely proud of our Founder and CEO, Peter Hughes, shortlisted for Industry Person of the Year at the\u2026 https:  t.co G4cBd6qsx4"},{"created_at":"11-23-2017","tweet":"RT @ADGlobalMarket: .@kslaw & #ADGM team completed a successful meeting with the #SaudiArabia industry on structuring #funds & #investments\u2026"},{"created_at":"11-23-2017","tweet":"RT @PrivateEquityon: Bain Capital might start managing Harvards real estate assets - The Real Deal Magazine https:  t.co kZNduO54ZB"},{"created_at":"11-23-2017","tweet":"RT @ApexFundService: Wishing a wonderful holiday weekend to all of those celebrating Thanksgiving over the coming days #Thanksgiving #Happy\u2026"},{"created_at":"11-23-2017","tweet":"@careersatdp @duffandphelps Happy thanksgiving from us....the spread looks amazing!"},{"created_at":"11-23-2017","tweet":"@StarMountainCap Same to you!"},{"created_at":"11-23-2017","tweet":"RT @maltaprofile: Our #CEO of the #Week is Paulianne Nwoko of Apex Fund Services (Malta).\nhttps:  t.co R1hxPZ2Nuh https:  t.co zxaVaHy9pE"},{"created_at":"11-22-2017","tweet":"Wishing a wonderful holiday weekend to all of those celebrating Thanksgiving over the coming days #Thanksgiving\u2026 https:  t.co gXn7nhjQNi"},{"created_at":"11-22-2017","tweet":"Delighted that our Founder and CEO, Peter Hughes, is recognized in this line up. https:  t.co 5cZjjv8Czx"},{"created_at":"11-20-2017","tweet":"We are currently seeking to fill the following positions to join our team in Melbourne:\n  - Senior Account Manager\u2026 https:  t.co 7GlfsIlwWy"},{"created_at":"11-17-2017","tweet":"Peter Hughes, Founder and CEO of Apex Fund Services has been shortlisted for the Global Custodian Industry Person o\u2026 https:  t.co q3B3LzvmQ6"},{"created_at":"11-16-2017","tweet":"YOU CAN STILL REGISTER: To celebrate becoming one of the first global financial institutions to be officially licen\u2026 https:  t.co Ku3OYGyoNi"},{"created_at":"11-15-2017","tweet":"RT @globalcustodian: Huge congratulations to those shortlisted for our Industry Person of the Year for North America:\n\nClaudine Gallagher @\u2026"},{"created_at":"11-14-2017","tweet":"Join us for a fireside chat in New York that will deliver thought-provoking insights on industry trends in innovati\u2026 https:  t.co XavzxzspIH"},{"created_at":"11-09-2017","tweet":"We were at the AIM Summit Dubai 2017 for two interactive days of discussion at the St Regis Al Habtoor City. https:  t.co OoFnDTDo7S"},{"created_at":"11-08-2017","tweet":"REGISTER NOW: Join us in Abu Dhabi! To celebrate becoming one of the first global financial institutions to be offi\u2026 https:  t.co YUanfCvBz1"},{"created_at":"11-07-2017","tweet":"Glyn Gibbs, Regional Head of Business Development, Apex MENA, will be a panelist at the @AIM_Summit 2017 in Dubai.\u2026 https:  t.co AXsWccabyo"},{"created_at":"11-06-2017","tweet":"Ashmita Chhabra, Managing Director, Apex was part of a focus group with the MAS to discuss feedback on S-VACC, thei\u2026 https:  t.co TaPMQjeejC"},{"created_at":"11-02-2017","tweet":"We are at the @AIMA_org Singapore Forum today. Gold sponsors to support the local fund industry & its progress\u2026 https:  t.co xY2hrXXpge"},{"created_at":"10-27-2017","tweet":"Apex Malta does #PinkFriday in support of Breast Cancer Awareness & the Marigold Foundation. Look at those cupcakes\u2026 https:  t.co 0ThBuoeVv7"},{"created_at":"10-27-2017","tweet":"Have you read our useful update on MIFID II? Read now to make sure you\u2019re up to date on the changes & requirements.\u2026 https:  t.co 2CcHXkqw3R"},{"created_at":"10-26-2017","tweet":"Apex Fund Services outperforms in every category in the 2017 Global Custodian HFA survey! https:  t.co nfuw3hbCQv\u2026 https:  t.co co7gB4o5aK"},{"created_at":"10-24-2017","tweet":"We are currently seeking a Junior Financial Analyst to join our team in Luxembourg. Apply now:\u2026 https:  t.co nhNdQSEpKu"},{"created_at":"10-23-2017","tweet":"Apex US & our new collegaues from Deutsche Bank AFS at HFMweek awards in NYC-Winners of Best Admin over $30bn: Inno\u2026 https:  t.co dbY1JBryM5"},{"created_at":"10-23-2017","tweet":"RT @CMSearch: .@DeutscheBank AFS set to merge with .@ApexFundService and Genstar Capital https:  t.co cozqzIs8P2"},{"created_at":"10-20-2017","tweet":"RT @BankerNews: Apex to buy Deutsche Bank\u2019s Alternative Fund Services https:  t.co cKc1qGxtFO @ApexFundService #acquisition"},{"created_at":"10-19-2017","tweet":"RT @_JonWatkins: .@ApexFundService acquires Deutsche Bank\u2019s Alternative Funds Services business https:  t.co Xx1TfQKEWB"},{"created_at":"10-19-2017","tweet":"RT @_JonWatkins: Big news: @ApexFundService to acquire @DeutscheBanks Alternative Funds Services business. More to follow."},{"created_at":"10-19-2017","tweet":"Today we are excited to announce the acquisition of Deutsche Banks Alternative Fund Services business. Read More:\u2026 https:  t.co GknzNIUdXd"},{"created_at":"10-18-2017","tweet":"Dennis Westley, Managing Director for Apex North America and Carsten Jerrild, Sales Director for Apex USA at the AL\u2026 https:  t.co GBDL3mStbt"},{"created_at":"10-18-2017","tweet":"Apex targets Insurance Fund Market by expanding local offering from Bermuda. https:  t.co jUQ3sfFgPu https:  t.co IdNA6jkVUa"},{"created_at":"10-18-2017","tweet":"https:  t.co AimZJaPCqu"},{"created_at":"10-18-2017","tweet":"RT @HBEisen: #HedgeFunds #FundAdmin. @ApexFundService  https:  t.co KAUNwOe3EL"},{"created_at":"10-17-2017","tweet":"Apex continues to expand targeting top independent admin spot https:  t.co edeRHrIEff #fundadmin #Mergers\u2026 https:  t.co G1BUS7KWKK"},{"created_at":"10-17-2017","tweet":"RT @netConsultLtd: Getting ready for our drinks evening with @ApexFundService @digiterre @AssuredPartners #summersoiree #lastdaysofsummer #\u2026"},{"created_at":"10-16-2017","tweet":"RT @BankerMENA: ENBD REIT announces full deployment of funds raised by listing on Nasdaq Dubai https:  t.co iywHhAVB2u https:  t.co Ue9oJoH\u2026"},{"created_at":"10-16-2017","tweet":"RT @EY_Australia: Every day is different for our people, we foster a #flexible working culture to enable them to meet their goals \u2013 https: \u2026"},{"created_at":"10-12-2017","tweet":"Thats a wrap after an interactive day of discussions at the SEA Private Equity Conference, at the Grand Hyatt in S\u2026 https:  t.co adeBjItbhi"},{"created_at":"10-10-2017","tweet":"Apex Asia wins Best Administrator - Fund of Hedge Funds (Asia only assets under $30bn). Thank you to our clients fo\u2026 https:  t.co U18iSCjO9G"},{"created_at":"10-10-2017","tweet":"The latest Apex Regulatory update is now available! Read it here: https:  t.co 7CPKA63Ozn   #regulations\u2026 https:  t.co Wat5fmljUV"},{"created_at":"10-10-2017","tweet":"Apex is currently seeking an Account Manager, Middle Office for their office in Sligo. Apply now!\u2026 https:  t.co azu1S8q3Mt"},{"created_at":"10-10-2017","tweet":"Book your place now to The Private Equity Focus Day organised by @Bloomberg on 26 Oct 2017 in Moscow!\u2026 https:  t.co Jzo564dF8c"},{"created_at":"10-09-2017","tweet":"RT @MarcPowersAtty: Check out the White Paper @BakerHostetler  and  @ApexFundService  just co-published https:  t.co 9fCGJLa40P  on Global\u2026"},{"created_at":"10-09-2017","tweet":"We are proud to sponsor the 10th Annual Canadian Hedge Fund Awards Conference & Gala Dinner in Toronto next week.\u2026 https:  t.co mFE1pKySlz"},{"created_at":"10-05-2017","tweet":"The future of the hedge fund industry is changing. Download the latest whitepaper https:  t.co EdECEF7M7D\u2026 https:  t.co GEminnJsHU"},{"created_at":"10-03-2017","tweet":"We are currently seeking a Senior Account Manager \u2013 Fund Accounting to join our team in Melbourne, Australia!\u2026 https:  t.co roIbYlfUYn"},{"created_at":"10-03-2017","tweet":"Apex discusses an administrator\u2019s lines of defence for funds in the HFM Special Report - Defending a Fund. Read mor\u2026 https:  t.co hidergjugX"},{"created_at":"10-02-2017","tweet":"Save the Date: 19 Oct 2017! The Annual NAIMA KPMG Alternative Investment Forum in Moscow is coming up! Register now\u2026 https:  t.co vuOrywAaNy"},{"created_at":"09-29-2017","tweet":"RT @ChiefOfficers: #PrivateEquity not put off by difficult trading environment as money invested reaches 10-yr high https:  t.co LDZrg5MG5h"},{"created_at":"09-28-2017","tweet":"Apex and Baker Law explore the future for Fund Administration in a jointly published whitepaper. Download a copy!\u2026 https:  t.co g0My03pcxy"},{"created_at":"09-28-2017","tweet":"RT @CTAIntelligence: How diversified is the #hedgefund industry? Do you agree with #HFMInsights?\nhttps:  t.co S9xSKmM0kr https:  t.co Mi7g1\u2026"},{"created_at":"09-27-2017","tweet":"Follow us on Facebook for regular updates on the latest positions available at Apex. https:  t.co esur9d1lcw https:  t.co f8dZcPz86L"},{"created_at":"09-27-2017","tweet":"RT @k_kanner: @ApexFundService Thank you for your precious support! #L\u00ebtzGoGold to fight childhood cancer! \ud83c\udf97\ud83d\udc9b\ud83c\udf97"},{"created_at":"09-27-2017","tweet":"We have multiple job vacancies available for our office in Malta! Visit our website for more information:\u2026 https:  t.co ofvdazmZZD"},{"created_at":"09-22-2017","tweet":"Tonight is the night. Its the annual Apex Summer Drinks Reception held at the fabulous Palace of Westminster!\u2026 https:  t.co HvxebFG11Q"},{"created_at":"09-22-2017","tweet":"Our alternative credit fund panel with@EY_Australia kicked off in Sydney this evening https:  t.co FI2E5wdi8P\u2026 https:  t.co logQTRMyUT"},{"created_at":"09-20-2017","tweet":"Apex London is recruiting! Take a look at the available roles here:\nhttps:  t.co P6zkTgj8jc https:  t.co iUIZPjLhWW"},{"created_at":"09-19-2017","tweet":"Apex proudly sponsors the LETZ Go Gold initiative helping children with cancer https:  t.co ashzFrfrez @k_kanner\u2026 https:  t.co plhna3FWxz"},{"created_at":"09-18-2017","tweet":"RT @FundsSociety: .@ApexFundService, listo para operar en el centro financiero internacional de #AbuDhabi @FundsSociety https:  t.co 2GKTVw\u2026"},{"created_at":"09-18-2017","tweet":"We are all set for the @ALFIfunds Global Distribution Conference. Visit our stand & catch up w  the EU team to disc\u2026 https:  t.co tpPdSsn9Rq"},{"created_at":"09-18-2017","tweet":"Looking forward to the @AIMA_org Singapore forum. Apex is proud to be a Gold Sponsor & we look forward to seeing so\u2026 https:  t.co fYm4ksbKV3"},{"created_at":"09-12-2017","tweet":"RT @daomag: #Apex Fund Services ha ricevuto l\u2019autorizzazione piena alla operativit\u00e0 in Abu Dhabi. Gli asset manager continuano\u2026 https:  t.c\u2026"},{"created_at":"09-12-2017","tweet":"Apex Fund Services expands with acquisition of Equinoxe https:  t.co EchuBOKKL7 #acquisition #M&A #mergers\u2026 https:  t.co 9bpCmXu5bh"},{"created_at":"09-12-2017","tweet":"RT @aminckhoury: The latest Private Equity News Curated by Amin C Khoury! https:  t.co mG1VGnjuF9 Thanks to @JeffreyJDavis @ExemptMarkets @\u2026"},{"created_at":"09-08-2017","tweet":"Apex Fund Services secures ADGM licence &#124; Hedgeweek https:  t.co xJyt1kr5l2 via @nmudgal"},{"created_at":"09-08-2017","tweet":"Apex approved by FSRA in Abu Dhabi https:  t.co EqWcMttA0O #fundadmin #Compliance #FSRA #ADGM #approved\u2026 https:  t.co 3vFVL23FoK"},{"created_at":"09-06-2017","tweet":"RT @markets: U.S. stocks gain after lawmakers reach a deal with Trump to extend the debt limit #WDYM https:  t.co G9CPRQzg8R https:  t.co U\u2026"},{"created_at":"08-15-2017","tweet":"Fund manager moves in on UK residential property market https:  t.co UU619tkJN6 #fundadmin #realestate #privateequity #assetmanagers #funds"},{"created_at":"08-11-2017","tweet":"RT @AdamPhonesLtd: Its crucial to check & double check whether your #callrecording solution is compliant. Read our 4 tips: https:  t.co CL\u2026"},{"created_at":"08-08-2017","tweet":"Apex Malta celebrates summer with a team photo with the beautiful Valletta providing the perfect backdrop #Malta\u2026 https:  t.co URdOBDLfRW"},{"created_at":"08-08-2017","tweet":"RT @FinancialNews: .@UBS hires top Barclays compliance officer https:  t.co HiLsJeubNk"},{"created_at":"08-08-2017","tweet":"RT @DeepLearn007: 3Q 2017 Fintech Analyst Note: Asset Management\n#AI #MachineLearning #deeplearning #Fintech #ML #DL #tech https:  t.co fQL\u2026"},{"created_at":"08-08-2017","tweet":"RT @tzack16: Thanks to ETFs, S&P 500 Companies Have a New Boss -- the S&P 500 https:  t.co dwJckXuHmu https:  t.co wLDZQOghqm"},{"created_at":"08-08-2017","tweet":"Apex explores the latest fund industry regulation: https:  t.co 5FMP43xgAv #GDPR #CRS #FATCA #Compliance\u2026 https:  t.co TQ2CqmoiIh"},{"created_at":"08-02-2017","tweet":"Apex Malta is seeking a Shareholder Services Supervisor. Read More: https:  t.co abputXzhAG #maltajobs\u2026 https:  t.co utkRih7Jai"},{"created_at":"07-26-2017","tweet":"RT @PrivateEquityon: For Private Equity Firms Looking to Expand into Emerging Markets, Brazil Is Ready for Its Close-Up - GlobeNewswire\u2026 ht\u2026"},{"created_at":"07-26-2017","tweet":"RT @JimMarous: 8 Enterprise Technologies for 2020.\n\n#AI \n#AR \n#Blockchain\n#drones \n#IoT\n#VR\n#3D\n\nhttps:  t.co tzoQ3jYIkX \n\nHT @MikeQuindazz\u2026"},{"created_at":"07-25-2017","tweet":"Apex works with PFS-PAXUS on CRS Reporting Solution https:  t.co WmebSlN8Us #CRS #CommonReportingStandards\u2026 https:  t.co bT4eFOBXn4"},{"created_at":"07-25-2017","tweet":"Apexs Head of BD- MENA, Glyn Gibbs, speaks to @GulfBusiness about the Rise of the REIT in Gulf Markets\u2026 https:  t.co jecBu2BhwC"},{"created_at":"07-19-2017","tweet":"RT @paulwalsh2609: .@NorthernTrust makes latest #Brexit play with Luxembourg move https:  t.co NJJcRoYQ6K \n@globalcustodian"},{"created_at":"07-14-2017","tweet":"RT @_JonWatkins: Fund transactions primed for aviation moment with blockchain https:  t.co USYTy2gFer on @globalcustodian"},{"created_at":"07-13-2017","tweet":"Apex UK MD, Paul Spendiff, speaks about MiFID II & the industrys somewhat slow preparation https:  t.co RozJwhXZRT\u2026 https:  t.co cgMBQ9n26O"},{"created_at":"07-13-2017","tweet":"How can hedge funds thrive in a challenging environment? \u2013 Linedata Exchange Europe https:  t.co UWWNhgEaT2"},{"created_at":"07-11-2017","tweet":"RT @The_MarketMogul: Will MiFID II hurt banking profits? https:  t.co 5lIHxrYKrf #regulation #MiFID2 #UK # https:  t.co Hxvk83iKXD"},{"created_at":"07-11-2017","tweet":"Apex Ireland Chairman an Europe MD, John Bohan, speaking at The Entrepreneur Investor Summit Malta @juliemariemeyer\u2026 https:  t.co lyy591Uwfl","Comments":[{"username":" JulieMarieMeyer ","timestamp ":"07-11","comment":"Replying to @ApexFundService    super contribution"}]},{"created_at":"07-07-2017","tweet":"Apex Irelands 10 Year Celebration last night was fantastic. Thank you to all that have worked with and supported u\u2026 https:  t.co tvtLgZAtRu"},{"created_at":"07-07-2017","tweet":"They look fantastic #supportlocalyouth #fundadmin #ApexUKSupportsUrbanHope #youthwork #london https:  t.co XiyXQ2fZGI"},{"created_at":"07-06-2017","tweet":"Blog: 2017 Guide to Alternative Investment Fund in Europe https:  t.co ZGA1J6ZpeU"},{"created_at":"07-06-2017","tweet":"Looking forward to celebrating Apex Irelands 10yr anniversary tonight & welcoming our special guest @ghook\u2026 https:  t.co Z2zkC7DWch"},{"created_at":"06-23-2017","tweet":"Team Seward & Kissel in their stylish Apex tees @Sewkis #fundservices #NewYork #fundadmin #hedgefunds\u2026 https:  t.co ROvaKWdstH"},{"created_at":"06-23-2017","tweet":"Apex celebrates national day in Luxembourg tomorrow https:  t.co q1ZUAvG5NO #nationalday #Luxembourg #fundadmin\u2026 https:  t.co WHJnmoyc7l"},{"created_at":"06-22-2017","tweet":"Wishing everyone finishing Ramadan & celebrating Eid in the next few days a happy & peaceful time #Ramadan2017\u2026 https:  t.co 5bQ6DpKhbI"},{"created_at":"06-19-2017","tweet":"It was a full house at our co-hosted Breakfast Seminar with @AIMA_org & @RSMUK this morning. Interesting discussions https:  t.co ui2TVn7jjV"},{"created_at":"06-19-2017","tweet":"RT @pradeeprao_: What are the #Financial #UseCases of #Blockchain ?\n\n#Bitcoin \n#DLT \n#Startups \n#Fintech \n#makeyourownlane \n#Mpgvip \n#AI \n#\u2026"},{"created_at":"06-13-2017","tweet":"Apex co-hosts seminar next week w  @AIMA_org & @RSMUK The evolving dynamic between funds & investors\u2026 https:  t.co SHjGbNCrBh"},{"created_at":"06-08-2017","tweet":"RT @businessinsider: Traders are cranking up their bets against Snap https:  t.co m416bui0hv https:  t.co ZmmvPOs4UV"},{"created_at":"06-08-2017","tweet":"RT @ETFsMadeSimple: Robo-advisers employ algorithms to deliver low-cost online portfolio management #ETFs #Robo-advisor  #CapitalAtRisk ht\u2026"},{"created_at":"06-08-2017","tweet":"RT @HydroFunds: Qatar Faces Fallout from Diplomatic Struggles https:  t.co OqNacSnR8w"},{"created_at":"06-02-2017","tweet":"RT @UBS: Forget the haves & have nots, can we become more equal? Hear @JosephEStiglitz in the run up to the UK #GeneralElection #NobelPersp\u2026"},{"created_at":"06-01-2017","tweet":"@AIMA_org Were delighted to be involved #AIMASpotlight  https:  t.co hFQpTaO7on #fundadmin #alternatives #funds #USFunds #Assetmanagement"},{"created_at":"06-01-2017","tweet":"RT @AIMA_org: We are pleased to announce @ApexFundService as an event sponsor at #AIMASpotlight USA on 7th June https:  t.co JhXCpjgVf0"},{"created_at":"05-31-2017","tweet":"Apex Bahrain are giving back to those less fortunate for Ramadan. Heres the team with their donations #Ramadan2017\u2026 https:  t.co 4wMyi1VO6s"},{"created_at":"05-30-2017","tweet":"RT @globalcustodian: .@ApexFundService receives Abu Dhabi green light writes @paulwalsh2609 \nhttps:  t.co elRmjmfnaE"},{"created_at":"05-30-2017","tweet":"RT @paulwalsh2609: .@ApexFundService receives Abu Dhabi green light writes @paulwalsh2609 \n@globalcustodian\nhttps:  t.co ocH01Sgf2M"},{"created_at":"05-26-2017","tweet":"RT @HLInvest: Investing In India? Could You Benefit From Indias Demographic Sweet Spot? Risk Of Loss. https:  t.co EXAc5McO1F https:  t.co\u2026"},{"created_at":"05-26-2017","tweet":"Best wishes to all of our twitter friends observing Ramadan this year #Ramadan2017 #Ramadan #ramadankareem https:  t.co FckzBOby6v"},{"created_at":"05-26-2017","tweet":"RT @The_MarketMogul: How will #blockchain transform international law? https:  t.co DyhBA41ciz #Law #cryptocurrencies https:  t.co LB9SUBA9\u2026"},{"created_at":"05-22-2017","tweet":"RT @hedgeanswers: A true Woodstock of Capitalism: https:  t.co erDx2ND63h"},{"created_at":"05-19-2017","tweet":"Another great day at @SALTConference in Las Vegas #assetmanagers #privateequity #hedgefunds #fundadmin #funds\u2026 https:  t.co 2nhz1rPQ5o"},{"created_at":"05-17-2017","tweet":"Great catching up with our friends at @DMS & @Alpha_Desk at @SALTConference this year. A great event as always\u2026 https:  t.co SbtGiJZwLs"},{"created_at":"05-16-2017","tweet":"Apex Fund Services supports second REIT launch in the UAE #REIT #Funds #UAE #Fundadmin #RealEstate #PrivateEquity\u2026 https:  t.co 0fyeBHU4BC"},{"created_at":"05-16-2017","tweet":"Join us next week at the @HFMWeek Global Distribution Summit in London https:  t.co wrByBy55x6 #fundmanagers\u2026 https:  t.co 637L30AeU3"},{"created_at":"05-16-2017","tweet":"Join Apex & @HFMweek at the 2017 Australia Operational Leaders Summit https:  t.co T2YX2sI1oi #australianfunds\u2026 https:  t.co 0VEZBZLoBD"},{"created_at":"05-12-2017","tweet":"RT @The_MarketMogul: Could blockchain be the key to unlocking #financialinclusion? https:  t.co M4xLDwyo8a #Blockchain https:  t.co EEZYezQ\u2026"},{"created_at":"05-10-2017","tweet":"RT @HFMWeek: @ApexFundService targeting a top 5 admin spot after Equinox merger makes our cover as we reveal Genstar acquisition of both fi\u2026"},{"created_at":"05-09-2017","tweet":"RT @FTVCapital: Congratulations to @ApexFundService on becoming a top 15 admin through acquisition of Equinoxe https:  t.co JdfsjNyPpb"},{"created_at":"05-09-2017","tweet":"@FTVCapital Thank you @FTVCapital"},{"created_at":"05-09-2017","tweet":"RT @_JonWatkins: Private equity backing propels @ApexFundService into Equinoxe acquisition https:  t.co frPWwOyEsZ via @globalcustodian"},{"created_at":"05-09-2017","tweet":"@AlanMeaney @FundRecs Thank you @AlanMeaney - exciting times ahead! #acquisition #progress #growth #fundadmin #fundservices #privateequity"},{"created_at":"05-09-2017","tweet":"Apex becomes Top 15 Administrator Globally through acquisition of Equinoxe - See more at: https:  t.co KlmxYC7wWx"},{"created_at":"05-03-2017","tweet":"Check out the latest Apex Cap Intro Fund Spotlight: https:  t.co LjIHC0ypiI #capintro #fundperformance\u2026 https:  t.co nYcPUHtIDQ"},{"created_at":"05-03-2017","tweet":"Apex partners with @DataGuidance to enhance data protection & data privacy programme https:  t.co 9a8G3fUz4e\u2026 https:  t.co n6X2clO00E"},{"created_at":"04-28-2017","tweet":"Congratulations to all the winners. Very happy to have been awarded Best Administrator- Technology at last nights\u2026 https:  t.co 96plGEN4sE"},{"created_at":"04-28-2017","tweet":"Very proud of our Group CIO, Barry Rooney, listed no.11 in the top 100 CIOs : Business & Finance mag @issuu\u2026 https:  t.co dvlDzp0lV8"},{"created_at":"04-27-2017","tweet":"Great to win Best Administrator-Technology @ 2017 @HFMWeek awards - Apex is committed to best in class technology\u2026 https:  t.co 4MXwmkzjo4"},{"created_at":"04-27-2017","tweet":"RT @globalcustodian: Private equity firms can\u2019t ignore administrators amid new fund boom https:  t.co MIiZxeOnqI\n#GAIMOPSCayman"},{"created_at":"04-27-2017","tweet":"RT @_JonWatkins: Write up from #GAIMOpsCayman Private equity firms can\u2019t ignore administrators amid new fund boom https:  t.co h6dM4GCnzk h\u2026"},{"created_at":"04-26-2017","tweet":"Great hosting an evening w  #DMSGovernance at #GAIMCayman last night. Catching up with industry professionals & sam\u2026 https:  t.co b9QLVJvWWG"},{"created_at":"04-25-2017","tweet":"RT @The_MarketMogul: How Artificial Intelligence will evolve and pave businesses in the future https:  t.co HaMjiVS3Xt #AI #ArtificialIntel\u2026"},{"created_at":"04-25-2017","tweet":"RT @PropFundsWorld: Empiric appoints CFO https:  t.co b1cFVYUjFb"},{"created_at":"04-21-2017","tweet":"RT @InvEurope: Ex-French group fund selector joins Nordea AM https:  t.co 7JCN9D2MxY"},{"created_at":"04-21-2017","tweet":"RT @The_MarketMogul: Winners and losers of Mays snap election https:  t.co z6ZjU1GV3m #TheresaMay #UK https:  t.co u9C9su2EfI"},{"created_at":"04-21-2017","tweet":"RT @FINTECHCircle: BBC News - Credit card with a fingerprint sensor revealed by Mastercard https:  t.co huJjjrX3gQ #biometrics #fintech #pa\u2026"}],"TwitterMentionInfo":[{"created_at":"01-26-2018","tweet":"RT @business: Whats in store for the global economy in 2018? Carney, Kuroda and Lagarde discuss #WEF18 https:  t.co onUWW7wgZ2"},{"created_at":"01-26-2018","tweet":"We are currently hiring a Fund Accountant to join our team in Dublin. Interested candidates, apply now!\u2026 https:  t.co oAHrOdDW3s"},{"created_at":"01-26-2018","tweet":"Happy Australia Day to all our Aussie clients and contacts #AustraliaDay2018 #connected #globalbusiness https:  t.co nT97fteBz8"},{"created_at":"01-26-2018","tweet":"@ApexFundService I am RAJEESH KHANNA CHINNASWAMY work in singapore APEX as a Head of Private Equity Operations. I b\u2026 https:  t.co 1HQeGIpDnd"},{"created_at":"01-26-2018","tweet":"@ApexFundService I am RAJEESH KHANNA CHINNASWAMY work in singapore APEX as a Head of Private Equity Operations. I b\u2026 https:  t.co THHp83xY0s"},{"created_at":"01-26-2018","tweet":"@ApexFundService I am RAJEESH KHANNA CHINNASWAMY work in singapore APEX as a Head of Private Equity Operations. I b\u2026 https:  t.co l5O00vPoZ1"},{"created_at":"01-26-2018","tweet":"@ApexFundService I am RAJEESH KHANNA CHINNASWAMY work in singapore APEX as a Head of Private Equity Operations. I b\u2026 https:  t.co wG5hpIv5l5"},{"created_at":"01-26-2018","tweet":"@ApexFundService I am RAJEESH KHANNA CHINNASWAMY work in singapore APEX as a Head of Private Equity Operations. I b\u2026 https:  t.co IISuRs3GKV"},{"created_at":"01-26-2018","tweet":"@ApexFundService I am RAJEESH KHANNA CHINNASWAMY work in singapore APEX as a Head of Private Equity Operations. I b\u2026 https:  t.co 0D3i0rSfLy"},{"created_at":"01-25-2018","tweet":"#WeAreHiring an IT Service Desk Manager to join our team in Dublin. For a full job description and to apply, click\u2026 https:  t.co epsRSQJKwR"},{"created_at":"01-25-2018","tweet":"@ApexFundService Well Done APEX!!!! TY, joe"},{"created_at":"01-25-2018","tweet":"A great turnout for the roundtable discussion on our latest fund admin landscape white paper with BakerHostetler. S\u2026 https:  t.co zLEdz8WdLJ","Comments":[{"username":" joerileyhudson ","timestamp ":"01-25","comment":"Replying to @ApexFundService    Well Done APEX!!!! TY, joe"}]},{"created_at":"01-24-2018","tweet":"@kkasbarian Thanks - an ever evolving topic!"},{"created_at":"01-24-2018","tweet":"We are hiring a Senior Corporate Officer to join our team in Luxembourg. Click here for a full job description and\u2026 https:  t.co t3HUzng8wK"},{"created_at":"01-24-2018","tweet":"Interesting article on #BigData in Asset Management industry\n#fintech https:  t.co wX4ETGC1L7","Comments":[{"username":" ApexFundService ","timestamp ":"01-24","comment":"Replying to @kkasbarian    Thanks - an ever evolving topic!"}]},{"created_at":"01-24-2018","tweet":"Our latest blog examins how big data is changing the face of the asset management industry. Take a look:\u2026 https:  t.co 3M0n7c6Yds"},{"created_at":"01-23-2018","tweet":"We are currently recruiting the following roles for our office in Luxembourg:\n1. Transfer Agency -Transfer Agency T\u2026 https:  t.co i2cJDAYQFN"},{"created_at":"01-23-2018","tweet":"Only one week left for the Real Deals Mid Market 2018 conference! Apex is pleased to be sponsoring and speaking at\u2026 https:  t.co k9GRpOrg9t"},{"created_at":"01-23-2018","tweet":"@JoeHudsonRilely @twentyminutevc @sascha_janzen @Inside_VC @fundmap @ApexFundService @twentyminutevc @VC_Nederland\u2026 https:  t.co aI5ezDXPwJ"},{"created_at":"01-22-2018","tweet":"We are recruiting a Business Implementation Administrator for any one of the following locations: Charlotte, Atlant\u2026 https:  t.co r2ExwAOF1X"},{"created_at":"01-19-2018","tweet":"RT @ApexFundService: This morning we are hosting a roundtable to discuss our recent Fund Admin Landscape whitepaper with @BakerHostetler in\u2026"},{"created_at":"01-19-2018","tweet":"This morning we are hosting a roundtable to discuss our recent Fund Admin Landscape whitepaper with @BakerHostetler\u2026 https:  t.co dAsiEYAI1z"}]},"TWITTERURL":"https://twitter.com/ApexFundService","TwitterTitlePercentage":"18.1818181818","TwitterLocationPercentage":"0","Status":"Success","TwitterMatchingSource":"SALESFORCE","accIdAppId":"0012900000FKJmfAAH,006290000052GeVAAU","APIMessage":"Success","username":"Apex Fund Services","screen_name":"ApexFundService","location":"Global","description":"Apex Fund Services is one of the world\u2019s largest independent fund administrators; with 1200+ staff across 26 jurisdictions and circa $350bn in AUA globally.","url":"https:\/\/t.co\/gpGGkJcCsS","followers_count":1628,"friends_count":2486,"listed_count":86,"profile_created_at":"10-30-2014","favourites_count":517,"statuses_count":1817}}';
+    		//		print_r($retyrnsome);
+    					return $retyrnsome;
+    					
+    				}
+                }
+
+				$tweets = $connection->get("https://api.twitter.com/1.1/statuses/user_timeline.json?screen_name=$screen_name&count=200");
+				$tweets = json_decode($tweets);
+                
+				//$replies = $connection->get("https://api.twitter.com/1.1/statuses/show/821197447984726017.json");
+				//$replies = json_decode($replies);
+				if(!empty($tweets)){
+					$TwitterTweetsInfo=$this->GetParsed($tweets);
+					$TwitterTweetsInfo=json_encode($TwitterTweetsInfo);
+				}else{
+					$TwitterTweetsInfo='';
+				}
+
+				$Mentions = $connection->get("https://api.twitter.com/1.1/search/tweets.json?q=$screen_name&count=200");
+				$Mentions=json_decode($Mentions);
+
+				if(!empty($Mentions->statuses)){
+					$Mentions=$Mentions->statuses;
+					$TwitterMentionInfo=$this->GetParsed($Mentions);
+					$TwitterMentionInfo=json_encode($TwitterMentionInfo);			
+				}else{
+					$TwitterMentionInfo='';
+				}
+				
+				if(!empty($TwitterTweetsInfo)){				
+					$TwitterTweetsInfo='"TwitterTweetsInfo":'.$TwitterTweetsInfo.'';
+				}
+
+				if(!empty($TwitterMentionInfo)){				
+					$TwitterMentionInfo='"TwitterMentionInfo":'.$TwitterMentionInfo.'';
+				}
+				
+				$endresult;
+				if((!empty($TwitterMentionInfo)) && (!empty($TwitterTweetsInfo))){				
+					$endresult="{".$TwitterTweetsInfo.",".$TwitterMentionInfo."}";
+				}else if((!empty($TwitterMentionInfo)) && (empty($TwitterTweetsInfo))){
+					$endresult="{".$TwitterMentionInfo."}";
+				}else if((empty($TwitterMentionInfo)) && (!empty($TwitterTweetsInfo))){
+					$endresult="{".$TwitterTweetsInfo."}";
+				}
+				$object;
+				if(!empty($endresult)){
+					$tweetsvalue=$tweets[0];
+					$r=0;
+					$TwitterTweetsInfo=array();
+					$TwitterTweetsInfo[$r]["APIMessage"]="Success";
+					$TwitterTweetsInfo[$r]["username"]=$tweetsvalue->user->name;
+					$TwitterTweetsInfo[$r]["screen_name"]=$tweetsvalue->user->screen_name;
+					$TwitterTweetsInfo[$r]["location"]=$tweetsvalue->user->location;
+					$TwitterTweetsInfo[$r]["description"]=$tweetsvalue->user->description;
+					$TwitterTweetsInfo[$r]["url"]=$tweetsvalue->user->url;
+					$TwitterTweetsInfo[$r]["followers_count"]=$tweetsvalue->user->followers_count;
+					$TwitterTweetsInfo[$r]["friends_count"]=$tweetsvalue->user->friends_count;
+					$TwitterTweetsInfo[$r]["listed_count"]=$tweetsvalue->user->listed_count;
+					$TwitterTweetsInfo[$r]["profile_created_at"]=date("m-d-Y",strtotime(strip_tags($tweetsvalue->user->created_at)));
+					$TwitterTweetsInfo[$r]["favourites_count"]=$tweetsvalue->user->favourites_count;
+					$TwitterTweetsInfo[$r]["statuses_count"]=$tweetsvalue->user->statuses_count;
+					$objDetails=json_encode($TwitterTweetsInfo);
+					$objDetails=str_replace(array("[{","}]"),"",$objDetails);
+					if(!empty($_GET['SocialDataURL'])){
+					    $resp[0]=$_GET['SocialDataURL'];
+					    $resp[3]="SALESFORCE";
+					}
+					$object ='{"TwitterDetails":'.$endresult.',"TWITTERURL":"'.$resp[0].'","TwitterTitlePercentage":"'.$NamePercent.'","TwitterLocationPercentage":"'.$LocationPercent.'","Status":"Success","TwitterMatchingSource":"'.$resp[3].'","accIdAppId":"'.$_GET['accountId'].','.$_GET['appId'].'",'.$objDetails.'}';
+				}
+				
+				//$object=str_replace("{}","",$object);
+			return $object;
+			}else{
+				//return '{"TwitterTweetsInfo":[],"TwitterMentionInfo":[]}';
+				//return "";
+			 $resp[0]=$_GET['SocialDataURL'];	 return '{"TWITTERURL":"'.$resp[0].'","TwitterTitlePercentage":"0","TwitterLocationPercentage":"0","TwitterMatchingSource":"TWITTER","Status":"Failed","APIMessage":"NoDataFound","accIdAppId":"'.$_GET['accountId'].','.$_GET['appId'].'"}';
+			}		
+	}
+
+	public function get_conversation($id_str, $screen_name, $return_type = 'json', $count = 100, $result_type = 'mixed', $include_entities = true,$connection){
+
+	     $params = array(
+	          'q' => 'to:' . $screen_name, // no need to urlencode this!
+	          'count' => $count,
+	          'result_type' => $result_type,
+	          'include_entities' => $include_entities,
+	          'since_id' => $id_str
+	     );
+
+	     $feed = json_decode($connection->get('search/tweets', $params), true);
+
+	     $comments = array();
+
+	     for ($index = 0; $index < count($feed['statuses']); $index++) {
+	          if ($feed['statuses'][$index]['in_reply_to_status_id_str'] == $id_str) {
+	               array_push($comments, $feed['statuses'][$index]);
+	          }
+	     }
+
+	     switch ($return_type) {
+	     case 'array':
+	          return $comments;
+	          break;
+	     case 'json':
+	     default:
+	          return json_encode($comments);
+	          break;
+	     }
+
+	}
+
+	public function GetParsed($tweets){		
+		$r=0;
+		$TwitterTweetsInfo=array();			
+		foreach ($tweets as $tweetskey => $tweetsvalue){
+			$TwitterTweetsInfo[$r]["created_at"]=date("m-d-Y",strtotime(strip_tags($tweetsvalue->created_at)));
+			$TwitterTweetsInfo[$r]["tweet"]=trim($this->backslashreplacer($tweetsvalue->text));
+			/*$TwitterTweetsInfo[$r]["username"]=$tweetsvalue->user->name;
+			$TwitterTweetsInfo[$r]["screen_name"]=$tweetsvalue->user->screen_name;
+			$TwitterTweetsInfo[$r]["location"]=$tweetsvalue->user->location;
+			$TwitterTweetsInfo[$r]["description"]=$tweetsvalue->user->description;
+			//$TwitterTweetsInfo[$r]["url"]=$tweetsvalue->user->url;
+			$TwitterTweetsInfo[$r]["followers_count"]=$tweetsvalue->user->followers_count;
+			$TwitterTweetsInfo[$r]["friends_count"]=$tweetsvalue->user->friends_count;
+			$TwitterTweetsInfo[$r]["listed_count"]=$tweetsvalue->user->listed_count;
+			$TwitterTweetsInfo[$r]["profile_created_at"]=date("m-d-Y",strtotime(strip_tags($tweetsvalue->user->created_at)));
+			$TwitterTweetsInfo[$r]["favourites_count"]=$tweetsvalue->user->favourites_count;
+			$TwitterTweetsInfo[$r]["statuses_count"]=$tweetsvalue->user->statuses_count;*/
+			$comment=$this->TwitterScrap($tweetsvalue->user->screen_name,$tweetsvalue->id_str,$tweetsvalue->text);
+			if(!empty($comment)){
+				$TwitterTweetsInfo[$r]["Comments"]=$comment;
+			}
+			$r++;
+		}
+		return $TwitterTweetsInfo;
+	}
+	
+	public function backslashreplacer($strr){
+		$What = array('\/',"&#39;","'","&amp;",'"','"',"/");
+		$which= array(" ","","","&","",""," ");
+		return str_replace($What,$which,$strr);
+		
+	}
+}
+?>
