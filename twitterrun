@@ -1,0 +1,54 @@
+<?php
+ini_set('display_errors',1);
+error_reporting(E_ALL);
+error_reporting(1);
+date_default_timezone_set('America/New_York');
+ignore_user_abort(true);
+set_time_limit(0);
+
+ob_start();
+// do initial processing here
+$response='Request Queued';
+echo $response; // send the response
+header('Connection: close');
+header('Content-Length: '.ob_get_length());
+ob_end_flush();
+ob_flush();
+flush();
+
+// now the request is sent to the browser, but the script is still running
+// so, you can continue...
+header('Content-Type: application/json; charset=utf-8');
+
+require_once 'twitteroauth-master/twitteroauth.php';
+require_once 'twitter.php';
+require_once 'twittersearch.php';
+require_once 'SendRespToSalesforce.php';
+
+$Twitter = new TwitterClass();
+$SearchClass=new SearchClass();
+if(empty($_GET["AccountName"]))$_GET["AccountName"]='';
+if(empty($_GET["LegalName"]))$_GET["LegalName"]='';
+if(empty($_GET["BillingStreet"]))$_GET["BillingStreet"]='';
+if(empty($_GET["BillingCity"]))$_GET["BillingCity"]='';
+if(empty($_GET["BillingState"]))$_GET["BillingState"]='';
+if(empty($_GET["BillingPostalCode"]))$_GET["BillingPostalCode"]='';
+if(empty($_GET["PhysicalStreet"]))$_GET["PhysicalStreet"]='';
+if(empty($_GET["PhysicalCity"]))$_GET["PhysicalCity"]='';
+if(empty($_GET["PhysicalState"]))$_GET["PhysicalState"]='';
+if(empty($_GET["PhysicalPostalCode"]))$_GET["PhysicalPostalCode"]='';
+
+
+$TwitterResponse=$Twitter->TwitterWrap(trim(strtolower($_GET["AccountName"])),trim(strtolower($_GET["LegalName"])),trim(strtolower($_GET["BillingStreet"])),trim(strtolower($_GET["BillingCity"])),trim(strtolower($_GET["BillingState"])),trim(strtolower($_GET["BillingPostalCode"])),trim(strtolower($_GET["PhysicalStreet"])),trim(strtolower($_GET["PhysicalCity"])),trim(strtolower($_GET["PhysicalState"])),trim(strtolower($_GET["PhysicalPostalCode"])));
+
+//print_r($TwitterResponse);die();
+//if(empty($TwitterResponse)){$TwitterResponse='';}else{$TwitterResponse='{"TwitterData":'.$TwitterResponse.',"accountIDappID":"'.$_GET['accountId'].','.$_GET['appId'].'"}';}
+if(empty($TwitterResponse)){$TwitterResponse='';}else{ $TwitterResponse='{"TwitterData":'.$TwitterResponse.'}'; }
+
+//print_r($TwitterResponse);die();
+$SendResponseToSalesforceVar= new SendResponseToSalesforceClass();
+$SendResponseToSalesforceVar->SendResponseToSalesforce($TwitterResponse);
+//print_r($TwitterResponse);
+die();
+//echo $TwitterResponse;
+?>
