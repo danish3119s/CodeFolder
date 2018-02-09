@@ -1,0 +1,288 @@
+<?php
+include "keywords.php";
+class USBank{
+	public $ProcessingVolume;
+	public $Deduction;
+	public function __construct(){
+		$KeyWords= new KeyWords();
+		$this->globalmonth="";
+		$this->Deduction=$KeyWords->DeductionKeyword();
+		$this->CompetitorData=$KeyWords->Competitor();
+		$this->DoNotPickKey=$KeyWords->DoNotPickKey();
+	}
+	public function GetDataOFAllMonth($text){
+	//	print_r($text);
+		$ExtractedMonth=$this->GetDataForAllMonth($text);
+		//print_r($ExtractedMonth);
+		$CalculateProcessingVolume=array();
+		foreach($ExtractedMonth as $ExtractedMonthkey => $ExtractedMonthvalue){
+			$DateAndMonthAndAccountNbr=$this->DateAndMonth($ExtractedMonthvalue);
+            print_r($DateAndMonthAndAccountNbr);
+             $tempvar=substr($DateAndMonthAndAccountNbr[0],-4);
+       // $tempvar='/'.$tempvar;
+        //print_r($tempvar);
+         $CompleteInfo=$this->GetDataForSections($ExtractedMonthvalue,$tempvar);
+
+		}
+	}
+
+public function GetDataForAllMonth($text){
+		if(strpos($text,"To Contact U.S. Bank")!== false){
+    		$exd=explode("To Contact U.S. Bank",$text);
+    	//	print_r($exd);die();
+    		unset($exd[0]) ;
+		}
+
+		//print_r($exd);
+		return $exd;
+
+}
+
+public function DateAndMonth($text){
+	//print_r($text);//Statement Period:<br> Mar 1 2017<br> through<br> Mar 31 2017<br>
+	//preg_match('/Statement Period: (.*?) - (.*?)<br>/', $text, $DateAndMonth);
+	preg_match('/Statement Period:<br> (.*?)<br> through<br> (.*?)<br>/', $text, $DateAndMonth);
+	//print_r($DateAndMonth);
+	preg_match('/Account Number (.*?)<br> /', $text, $Acandmonth);
+    //print_r($Acandmonth);
+    //$AccountNbr=$Acandmonth[1];
+    $AccountNbr=str_replace("-","",$Acandmonth[1]);
+    //print_r($AccountNbr);
+    $date1=date("m-d-Y",strtotime($DateAndMonth[1]));
+    $date2=date("m-d-Y",strtotime($DateAndMonth[2]));//print_r($date1);print_r($date2);
+    if($date1==$date2){
+      //print_r(array($date1,$AccountNbr));
+        return array($date1,$AccountNbr);
+    }else{
+      //print_r(array($date2,$AccountNbr));
+        return array($date2,$AccountNbr);
+    }
+
+}
+
+public function GetDataForSections($text,$tempvar){
+	//print_r($text);
+	$var;
+	 if (strpos($text, "Total Card Deposits") !== false){
+             $var="Total Card Deposits";
+        }elseif(strpos($text, "Total Other Deposits") !== false){
+        	$var="Total Other Deposits";
+        }
+	$Sections=array(0=>array("StartSection"=>"Balance Summary <br>","EndSection"=>"Balances only appear for days reflecting change","ColumnCount"=>1),
+                 1=>array("StartSection"=>"Customer Deposits <br>","EndSection"=>$var,"ColumnCount"=>2),
+                 2=>array("StartSection"=>"Other Withdrawals <br>","EndSection"=>"Total Other Withdrawals","ColumnCount"=>3)
+     );
+
+	 foreach($Sections as $Sectionskey=>$Sectionsvalue){
+      preg_match("/(?<=".$Sectionsvalue['StartSection'].")(.*?)(?=".$Sectionsvalue['EndSection'].")/s",$text,$SectionExtracted);
+        //print_r($SectionExtracted[0]);
+        $sectionrt=$SectionExtracted[0];
+        $data[$Sectionsvalue['StartSection']]=$this->IndividualSectionParser($sectionrt,$Sectionsvalue["ColumnCount"],$tempvar);//Here the array comes from function and becomes the second member of Start section
+     }
+     print_r($data);
+     return $data;
+
+}
+
+public function IndividualSectionParser($SectionList,$ColumnCount,$tempvar){
+	preg_match_all("/(?:<br>)([\s\S]*?)(?=<br>)/s",$SectionList,$brList);
+	// $srlist=$brList[0];
+   $brList=$brList[1];
+	// print_r($brList);
+    $SectionData="";
+     if($ColumnCount==1){
+        $SectionData=$this->commonparser1($brList,$tempvar);
+      }elseif($ColumnCount==2){
+			$SectionData=$this->commonparser2($brList,$tempvar);
+		}elseif($ColumnCount==3){ //print_r($SectionList);
+      $SectionData=$this->commonparser3($brList,$tempvar);
+    }
+
+        return $SectionData; 
+
+}
+
+public function commonparser1($brList,$tempvar){
+	$AllList=$brList;//print_r($tempvar);die();
+    $CommonArray=array();
+    $we=0;
+     for($i=0;$i<sizeof($AllList);$i++){
+      $Alllistfor=strip_tags($AllList[$i]);//preg_match("/\d{2}\/\d{2}/",trim($Alllistfor)) 
+      if(preg_match("/\w{3} \d/",trim($Alllistfor)) && strtotime(trim($Alllistfor))){
+      	//print_r($Alllistfor);
+      $CommonArray[$we]["CDWDate"]=date("m-d-Y",strtotime(trim(strip_tags($AllList[$i])).' '.$tempvar));
+       $CommonArray[$we]["Amount"]=trim(strip_tags($AllList[$i+1]));
+        if (strpos($CommonArray[$we]["Amount"], "-") !== false){
+                  $Temp=str_replace("-","",$CommonArray[$we]["Amount"]);
+                  $Temp='-'.$Temp;
+                  $CommonArray[$we]["Amount"]=$Temp;
+                 
+                }
+         $we++;
+      }	
+     } //print_r($CommonArray);die();
+     return $CommonArray;
+}
+
+ public function commonparser2($brList,$tempvar){
+ 	$AllList=$brList;
+ //	print_r($AllList);die();
+ 	$CommonArray=array();  $CommonArray2=array(); $CommonArray3=array();  $we3=500;
+    $we=0;  $key1; $key2; $ReferenceNoBlank=''; $extraLineData='';
+   for($i=0;$i<sizeof($AllList);$i++){
+   
+   	  $Alllistfor=strip_tags($AllList[$i]);
+
+   	   if(preg_match("/\w{3} \d/",trim($Alllistfor)) && strtotime(trim($Alllistfor))){
+   	   //	print_r($Alllistfor);
+
+   	   	$CommonArray[$we]["DatePosted"]=date("m-d-Y",strtotime(trim(strip_tags($AllList[$i])).' '.$tempvar));
+   	    $CommonArray[$we]["Amount"]=trim(strip_tags($AllList[$i+2]));
+   	   	$CommonArray[$we]["Description"]=trim(strip_tags(($AllList[$i+1])));   	   	
+   	   	$CommonArray[$we]["ReferenceNumber"]=$ReferenceNoBlank;
+   	   	$we++;
+   	   		if (strpos($AllList[$i+3], "Total Customer Deposits") !== false){
+               $key1=$i+3;    //print_r($AllList[$i+3].'   '.$key1);
+               break;
+        	}
+   	   }
+   } //print_r($CommonArray); 
+     	//$we=$we+1;//For Next array
+   for($key1 ; $key1<sizeof($AllList) ; $key1++){
+   	      $extraLineData='';//   print_r($AllList[$key1]." \n");
+       	 // $Alllistfor=strip_tags($AllList[$key1]);    array_key_exists(key,array)
+           $Alllistfor=strip_tags(substr($AllList[$key1],0,7));
+           //print($Alllistfor." \n");
+       	  if(preg_match("/\w{3} \d{1,2}/",trim($Alllistfor)) && strtotime(trim($Alllistfor)) ){
+          if(!preg_match("/\w{3} \d{1,2} \d{4}/",trim($AllList[$key1]))  ){//print($AllList[$key1]." \n");
+               $CommonArray2[$we]["DatePosted"]=date("m-d-Y",strtotime(trim(strip_tags($Alllistfor)).' '.$tempvar));
+              
+                if(preg_match("/\d{10}/",trim($AllList[$key1+2]))  ){$ReferenceNo=trim($AllList[$key1+2]);
+                
+                if(preg_match("/\d/",trim($AllList[$key1+3]))  ){ if(array_key_exists($key1+4,$AllList) 
+                	&& preg_match("/\w{3} \d{1,2}/",strip_tags(substr($AllList[$key1+4],0,7)))){}else{if(array_key_exists($key1+4,$AllList))$extraLineData=strip_tags($AllList[$key1+4]);}
+                	 $CommonArray2[$we]["Amount"]=trim(strip_tags($AllList[$key1+3])); }
+                else{$CommonArray2[$we]["Amount"]=trim(strip_tags($AllList[$key1+4])); 
+                if(array_key_exists($key1+5,$AllList) 
+                	&& preg_match("/\w{3} \d{1,2}/",strip_tags(substr($AllList[$key1+5],0,7)))){}else{if(array_key_exists($key1+5,$AllList))$extraLineData=strip_tags($AllList[$key1+5]);}
+
+                 }
+                }else{$ReferenceNo='';
+                
+                if(!preg_match("/\d/",trim($AllList[$key1+2]))  ){ 
+                 if(array_key_exists($key1+4,$AllList) 
+                  && preg_match("/\w{3} \d{1,2}/",strip_tags(substr($AllList[$key1+4],0,7)))){}else{if(array_key_exists($key1+4,$AllList))$extraLineData=strip_tags($AllList[$key1+4]);}
+                  $CommonArray2[$we]["Amount"]=trim(strip_tags($AllList[$key1+3])); }
+                else{ 
+                      if(array_key_exists($key1+3,$AllList) 
+                  && preg_match("/\w{3} \d{1,2}/",strip_tags(substr($AllList[$key1+3],0,7)))){}else{if(array_key_exists($key1+3,$AllList))$extraLineData=strip_tags($AllList[$key1+3]);}
+                  $CommonArray2[$we]["Amount"]=trim(strip_tags($AllList[$key1+2])); }
+                  // if(!empty($AllList[$key1+2])){  $CommonArray2[$we]["Amount"]=trim(strip_tags($AllList[$key1+2]));  }
+                  // elseif(empty($AllList[$key1+2])){  $CommonArray2[$we]["Amount"]=trim(strip_tags($AllList[$key1+3]));  }
+                  } 
+                $CommonArray2[$we]["Description"]=substr((trim(strip_tags(($AllList[$key1].$AllList[$key1+1])))),6).$extraLineData;
+                $CommonArray2[$we]["ReferenceNumber"]=$ReferenceNo;
+               $we++;
+            }
+          //  print($Alllistfor." \n");
+       	  }elseif(strtotime(trim($AllList[$key1])) && !preg_match("/\d/",trim($AllList[$key1]))  ){ //print_r($AllList[$key1].'=========================>'.$key1.'ElsePart'." \n");
+         //print_r($AllList[$key1+1].'=========================>'." \n");
+          $extraLineData2='';
+          $ConcatinationVar='';   $ConcatinationVar=$AllList[$key1].$AllList[$key1+1];
+          $TempDateVar=''; $TempDateVar=strip_tags(substr($ConcatinationVar,0,7));
+          //print_r($TempDateVar." \n");
+           $CommonArray3[$we3]["DatePosted"]=date("m-d-Y",strtotime(trim(strip_tags($TempDateVar)).' '.$tempvar));
+        
+        if(is_numeric(str_replace("-","",$AllList[$key1+4] )) && !preg_match("/\d{10}/",trim($AllList[$key1+4]))){
+        $CommonArray3[$we3]["Amount"]=trim(strip_tags($AllList[$key1+4])); 
+        if(!is_numeric(strip_tags($AllList[$key1+2]))) $extraLineData2=trim(strip_tags($AllList[$key1+2])); 
+      }elseif(is_numeric(str_replace("-","",$AllList[$key1+3] )) && !preg_match("/\d{10}/",trim($AllList[$key1+3]))){
+        $CommonArray3[$we3]["Amount"]=trim(strip_tags($AllList[$key1+3])); 
+        if(!is_numeric(strip_tags($AllList[$key1+2]))) $extraLineData2=trim(strip_tags($AllList[$key1+2])); 
+      }elseif(is_numeric(str_replace("-","",$AllList[$key1+2] )) && !preg_match("/\d{10}/",trim($AllList[$key1+2]))){
+        $CommonArray3[$we3]["Amount"]=trim(strip_tags($AllList[$key1+2])); 
+      }
+
+        $CommonArray3[$we3]["Description"]=substr((trim(strip_tags(($AllList[$key1+1])))),2).' '.$extraLineData2;
+        $CommonArray3[$we3]["ReferenceNumber"]=$ReferenceNoBlank;
+          $we3++; 
+        } 
+
+   } //print_r($CommonArray3);//print_r($CommonArray2);
+   $MergedCommonArray=array_merge($CommonArray,$CommonArray2,$CommonArray3);//print_r(array_merge($CommonArray,$CommonArray2,$CommonArray3));
+ //print_r($MergedCommonArray);
+   return $MergedCommonArray;
+
+ }
+  
+public function commonparser3($brList,$tempvar){
+//print_r($brList);                       // str_replace("-","/",$DateAndMonthAndAccountNbr[0])
+$AllList=$brList;
+$CommonArray=array();  $we=0;  $CommonArray2=array();  $we2=500;
+for($key1=0;$key1<sizeof($AllList);$key1++){
+  $Alllistfor=strip_tags(substr($AllList[$key1],0,7)); //print_r($Alllistfor." \n");
+   //print_r($AllList[$key1].'=========================>'.$key1." \n");key1
+if(preg_match("/^\w{3} \d{1,2}/",trim($AllList[$key1])) ){
+  if(!preg_match("/\w{3} \d{1,2} \d{4}/",trim($AllList[$key1]))  ){
+//print_r($AllList[$key1].'=========================>'.$key1." \n");
+ $CommonArray[$we]["DatePosted"]=date("m-d-Y",strtotime(trim(strip_tags($Alllistfor)).' '.$tempvar));
+ $AmountField=''; $extraLineData='';
+
+if( is_numeric(str_replace("-","",$AllList[$key1+1] )) && !preg_match("/\d{10}/",trim($AllList[$key1+1]))  ){
+  $CommonArray[$we]["Amount"]=trim(strip_tags($AllList[$key1+1])); 
+}elseif(is_numeric(str_replace("-","",$AllList[$key1+2] )) && !preg_match("/\d{10}/",trim($AllList[$key1+2]))){
+  $CommonArray[$we]["Amount"]=trim(strip_tags($AllList[$key1+2])); 
+  if(!is_numeric(strip_tags($AllList[$key1+1]))) $extraLineData=trim(strip_tags($AllList[$key1+1])); 
+}elseif(is_numeric(str_replace("-","",$AllList[$key1+3] )) && !preg_match("/\d{10}/",trim($AllList[$key1+3]))){
+   $CommonArray[$we]["Amount"]=trim(strip_tags($AllList[$key1+3])); 
+    if(!is_numeric(strip_tags($AllList[$key1+1]))) $extraLineData=trim(strip_tags($AllList[$key1+1])); 
+}
+
+$CommonArray[$we]["Description"]=substr((trim(strip_tags(($AllList[$key1])))),6).$extraLineData;
+if (strpos($CommonArray[$we]["Amount"], "-") !== false){
+                  $Temp=str_replace("-","",$CommonArray[$we]["Amount"]);
+                 // $Temp='-'.$Temp;
+                  $CommonArray[$we]["Amount"]=$Temp;
+                 
+                }
+
+ $we++;
+}
+}elseif(strtotime(trim($AllList[$key1]))  && !preg_match("/\d/",trim($AllList[$key1])) ){
+  //print_r($AllList[$key1].'=========================>'.$key1.'ElsePart'." \n");
+  // print_r($AllList[$key1+1].'=========================>'." \n");
+  $extraLineData2='';
+  $ConcatinationVar='';   $ConcatinationVar=$AllList[$key1].$AllList[$key1+1]; //print_r($ConcatinationVar." \n");
+  $TempDateVar=''; $TempDateVar=strip_tags(substr($ConcatinationVar,0,7));
+ //print_r($TempDateVar." \n");
+ $CommonArray2[$we2]["DatePosted"]=date("m-d-Y",strtotime(trim(strip_tags($TempDateVar)).' '.$tempvar));
+
+if(is_numeric(str_replace("-","",$AllList[$key1+3] )) && !preg_match("/\d{10}/",trim($AllList[$key1+3]))){
+   $CommonArray2[$we2]["Amount"]=trim(strip_tags($AllList[$key1+3])); 
+   if(!is_numeric(strip_tags($AllList[$key1+2]))) $extraLineData2=trim(strip_tags($AllList[$key1+2])); 
+}elseif(is_numeric(str_replace("-","",$AllList[$key1+2] )) && !preg_match("/\d{10}/",trim($AllList[$key1+2]))){
+  $CommonArray2[$we2]["Amount"]=trim(strip_tags($AllList[$key1+2])); 
+   if(!is_numeric(strip_tags($AllList[$key1+2]))) $extraLineData2=trim(strip_tags($AllList[$key1+2]));
+}
+elseif(is_numeric(str_replace("-","",$AllList[$key1+4] )) && !preg_match("/\d{10}/",trim($AllList[$key1+4]))){
+  $CommonArray2[$we2]["Amount"]=trim(strip_tags($AllList[$key1+4])); 
+  if(!is_numeric(strip_tags($AllList[$key1+2]))) $extraLineData2=trim(strip_tags($AllList[$key1+2]));
+}
+
+$CommonArray2[$we2]["Description"]=substr((trim(strip_tags(($AllList[$key1+1])))),2).' '.$extraLineData2;
+if (strpos($CommonArray2[$we2]["Amount"], "-") !== false){
+                  $Temp=str_replace("-","",$CommonArray2[$we2]["Amount"]);
+                  //$Temp='-'.$Temp;
+                  $CommonArray2[$we2]["Amount"]=$Temp;
+                 
+                }
+  $we2++;
+}
+
+}  //print_r($CommonArray2);  //print_r($CommonArray2);
+   $MergedCommonArray=array_merge($CommonArray,$CommonArray2);
+   return $MergedCommonArray;  //print_r($MergedCommonArray);
+}
+
+}
+?> 
