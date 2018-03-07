@@ -1,0 +1,78 @@
+<?php 
+// error_reporting(E_ALL);
+// ini_set('display_errors', 1);
+    require_once('SendRespToSalesforce.php');
+    if($_GET["attachmentid"]!=null){
+        $SortingArray=getmultimes();
+        //print_r($SortingArray);die();
+        if(!empty($SortingArray["AutoSizing"])){
+            finallysendtosf($SortingArray);
+        }else{
+            $SortingArray=getmultimes();
+            if(!empty($SortingArray["AutoSizing"])){
+                finallysendtosf($SortingArray);
+            }else{
+                $SortingArray=getmultimes();
+                if(!empty($SortingArray["AutoSizing"])){
+                    finallysendtosf($SortingArray);
+                }else{
+                    $FailedResp='{"AutoSizing":"null","status":"failed","parentid":"'.$_GET["parentId"].'"}';
+                    $SendResponseToSalesforceVar= new SendResponseToSalesforceClass();
+                    $SendResponseToSalesforceVar->SendResponseToSalesforce($FailedResp);            
+                }    
+            }
+        }
+    }else{
+        $FailedResp='{"AutoSizing":"null","status":"failed:No Attachment","parentid":"'.$_GET["parentId"].'"}';
+        $SendResponseToSalesforceVar= new SendResponseToSalesforceClass();
+        $SendResponseToSalesforceVar->SendResponseToSalesforce($FailedResp);           
+    }
+    
+    function finallysendtosf($SortingArray){
+        foreach($SortingArray["AutoSizing"] as $key=>$AutoSizing){
+            foreach($AutoSizing as $key1=>$AutoSizing1){
+                if(!empty($AutoSizing1["processingvolume"]["Month"])){
+                    $foundmonth[$key]=strtotime(str_replace("-","/",$AutoSizing1["processingvolume"]["Month"]));
+                }
+            }
+        }
+        
+        $RespData=json_encode($SortingArray);
+        if(!empty($foundmonth)){
+            $latestindex=array_search(max($foundmonth),$foundmonth);
+            $latesMonth=date("F",$foundmonth[$latestindex]);
+            //print_r($RespData);
+            
+            $RespData=substr($RespData, 0, -1);
+            //print_r($RespData);
+    		$RespData=$RespData.',"Source":"Auto-Sized","LatestMonth":"'.$latesMonth.'"}';
+        }
+        print_r($RespData);
+        $SendResponseToSalesforceVar= new SendResponseToSalesforceClass();
+        $SendResponseToSalesforceVar->SendResponseToSalesforce($RespData);
+    }
+    
+    function getmultimes(){
+        $explodeAttach=explode(",",$_GET["attachmentid"]);
+        //print_r($explodeAttach);
+        $RespData='{"AutoSizing":[';
+        foreach($explodeAttach as $keyrt=>$explodeAttach1){
+            //print_r("http://kcftools.domainserver2013.com/salesforce/sizingandscoring/index.php?attachmentid=".$explodeAttach1);
+            $DataResp=file_get_contents("http://kcftools.domainserver2013.com/salesforce/sizingandscoring/index.php?attachmentid=".$explodeAttach1);
+            if((!empty($DataResp)) && ($DataResp !="Unable to open file!")){
+                $DataRespF=$DataResp;
+            }else{
+                $DataRespF='{"status":"Error","Reason":"'.$DataResp.'"}';
+            }
+            $RespData.=$DataRespF.",";
+        }
+        $RespData=trim($RespData,",").'],"status":"success","parentid":"'.$_GET["parentId"].'"}';
+        //print_r($RespData);
+        $SortingArray=json_decode($RespData, true);
+        $foundmonth=array();
+        return $SortingArray;
+    }
+    
+    
+    
+?>
