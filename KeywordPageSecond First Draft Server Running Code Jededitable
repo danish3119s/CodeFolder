@@ -1,0 +1,340 @@
+<?php
+
+require_once("config/mysql.class.php");
+$database = new DataBasePDO();
+
+if(!empty($_POST['keyword'])){
+  $DeductionKeyword["keyword"]=$_POST['keyword'];
+  if(!empty($_POST['bank'])){
+    $DeductionKeyword["bank"]=$_POST['bank'];
+}else{
+  $DeductionKeyword["bank"]='ALL';
+  }
+
+
+    $database->insertOrUpdate('DeductionKeywordSandbox',$DeductionKeyword);
+    header('Location:  /salesforce/sizingscoringsandbox/KeywordPageSecond.php');
+}
+
+if(!empty($_GET['deletekey'])){
+  $DeductionKeyword="delete from DeductionKeywordSandbox where KeywordId=".$_GET['deletekey'];
+    $database->executeQuery($DeductionKeyword);
+    echo "<script>window.close();</script>";
+}
+
+
+
+
+$AllKeys="select * from DeductionKeywordSandbox";
+$AllKeysResult=$database->getAllResults($AllKeys);
+
+if(isset($_POST['type'])) {
+ //print_r($_POST['type']);
+$ValueKeyVar=$_POST['type'];
+if(!empty($ValueKeyVar)){
+$exd=explode(" ",$ValueKeyVar);
+ $BankKeyword="update DeductionKeywordSandbox SET bank='$exd[0]' where KeywordId=".$exd[1];
+    $database->executeQuery($BankKeyword);
+    header( 'refresh: 0.1; url=http://kcftools.domainserver2013.com/salesforce/sizingscoringsandbox/KeywordPageSecond.php' );
+    // echo "<script>window.close();</script>";
+}
+//print_r($ValueKeyVar);  print_r($exd);
+
+        // switch($_POST['type']) {
+        //     case 1:
+        //         header("Location: KeywordPageSecond.php");
+        //         break;
+          
+        // }
+    }
+
+    if(isset($_POST['test'])) { //if i have this post
+     $ValueKeyVarable=$_POST['test'];
+     if(!empty($ValueKeyVarable)){
+       $exdd=explode("----",$ValueKeyVarable);
+ $ChangeKeyword="update DeductionKeywordSandbox SET keyword='$exdd[0]' where KeywordId=".$exdd[1];
+$database->executeQuery($ChangeKeyword);
+    header( 'refresh: 0.1; url=http://kcftools.domainserver2013.com/salesforce/sizingscoringsandbox/KeywordPageSecond.php' );
+
+     }
+   // print_r($ValueKeyVarable); //echo $ValueKeyVarable; // print it
+      //  print_r($_POST['test']);
+}
+
+// if(isset($_POST['id'])){
+//   $exddd=explode("----",$_POST['id']);
+//    $ValueKeyVarableSecond=$_POST['value'];
+// $ChangeKeyword2="update citizenskeywords SET keyword='$ValueKeyVarableSecond' where KeywordId=".$exddd[1];
+// $database->executeQuery($ChangeKeyword2);
+   
+
+//   // header( 'refresh: 4; url=http://localhost/sizingandscoring/KeywordPageSecond.php' ); 
+
+//    //echo "<script>window.close();</script>";
+//    // die();
+//    // echo $_POST['id'];
+// }
+
+//print_r('POST EVERYONE outside if');
+if(isset($_POST['id'])){
+  $exddd=explode("----",$_POST['id']);
+   $ValueKeyVarableSecond=$_POST['value'];
+$ChangeKeyword2="update DeductionKeywordSandbox SET keyword='$ValueKeyVarableSecond' where KeywordId=".$exddd[1];
+$database->executeQuery($ChangeKeyword2);
+   
+
+  // header( 'refresh: 4; url=http://localhost/sizingandscoring/KeywordPageSecond.php' ); 
+
+   //echo "<script>window.close();</script>";
+   // die();
+   // echo $_POST['id'];
+echo "<meta http-equiv='refresh' content='0'>";
+}
+
+
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jeditable.js/1.7.3/jeditable.min.js"></script>
+</head>
+<style>
+    .tablelist{
+        max-height: 309px;
+        overflow-y: scroll;
+    }
+    .tablelist th{
+        font-weight:bold;
+    }
+    .tablelist td{
+        font-weight:100;
+        padding:4px !important;
+    }
+</style>
+<body>
+
+<div class="container">
+  <h2> KeywordPage</h2>
+  <div class="row">
+    <div class="col-sm-6">
+        <form action="#" method="post">
+            <div class="form-group">
+                <label for="email">Keyword:</label>
+                <input type="text" class="form-control" name="keyword" required>
+               
+              
+            </div>
+           
+              <label for="email">Bank:</label>
+                <select name="bank" >
+                <option value="">ALL</option>
+                <option value="CitizensBank">CitizensBank</option>
+                <option value="Pnc">Pnc</option>
+                <option value="UsBank">UsBank</option>
+                <option value="Chase">Chase</option>
+                <option value="JPMorgan">JPMorgan</option>
+                <option value="RegionsBank">RegionsBank</option>               
+            </select>
+           
+             <button type="submit" class="btn btn-default">Add Keyword</button>
+
+        </form>
+    </div>
+    <div class="col-sm-6 tablelist">
+        <table class="table table-bordered">
+            <thead>
+              <tr>
+                
+                <th title="keywords are not case sensitive">KEYWORDS (Click a Keyword for editing)</th>
+                <th>Bank</th>
+                <th></th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+                
+              <?php $line=1; foreach($AllKeysResult as $AllKeysResult1){?>
+              <tr  class="sample" ><td class="editable-text-full" contenteditable="false" id="ab----<?php  echo $AllKeysResult1['KeywordId'];?>"><?php  echo $AllKeysResult1['keyword'];?> </td><td><form method="post" enctype="multipart/form-data">            
+            <select name="type" id="type" onchange="this.form.submit()">
+                <option value=""><?php  echo $AllKeysResult1['bank'];?></option>
+                <option value="CitizensBank <?php  echo $AllKeysResult1['KeywordId'];?>">CitizensBank</option>
+                <option value="Pnc <?php  echo $AllKeysResult1['KeywordId'];?>">Pnc</option>
+                <option value="UsBank <?php  echo $AllKeysResult1['KeywordId'];?>">UsBank</option>
+                <option value="Chase <?php  echo $AllKeysResult1['KeywordId'];?>">Chase</option>
+                <option value="JPMorgan <?php  echo $AllKeysResult1['KeywordId'];?>">JPMorgan</option>
+                <option value="RegionsBank <?php  echo $AllKeysResult1['KeywordId'];?>">RegionsBank</option>
+                <option value="ALL <?php  echo $AllKeysResult1['KeywordId'];?>">ALL</option>
+
+            </select>
+        </form></td><td><a target="framename" onclick="functioncv()" href="<?php echo 'http://kcftools.domainserver2013.com/salesforce/sizingscoringsandbox/KeywordPageSecond.php?deletekey='.$AllKeysResult1['KeywordId'];?>"><span class="glyphicon glyphicon-trash"></span></a></td><td ><button id="trigger" class="edit_trigger"><span class="glyphicon glyphicon-pencil"></span></button></td></tr>
+              <?php $line++;} ?>
+            </tbody>
+          </table>    
+        
+    </div>
+  </div>
+</div>
+<script>
+function functioncv(){
+var result = confirm("Are you sure you want to delete keyword?");
+if (result) {
+    setTimeout(function(){ location.reload(); },1000);
+}
+
+}
+// $(function () {
+//     $("td").dblclick(function () {
+//         // alert(this.id);
+//         var OriginalContent = $(this).text();
+//          var Concatinationvar=this.id;
+//              Concatinationvar=Concatinationvar.substring(3);
+//         var inputNewText = prompt("Enter The Text:", OriginalContent);
+//              var outputText=inputNewText;
+//              inputNewText=inputNewText+'----'+Concatinationvar;
+//         if (outputText != null) {
+//             $(this).text(outputText)
+           
+//             $.ajax({
+//     type: 'post', // the method (could be GET btw)
+//     url: 'KeywordPageSecond.php', // The file where my php code is
+//     data: {
+//         'test': inputNewText // all variables i want to pass. In this case, only one.
+//     },
+//     success: function(data) { // in case of success get the output, i named data
+//        // alert(data); // do something with the output, like an alert
+//     }
+// });
+       
+//         }
+//     });
+// });
+
+/* data that will be sent along */
+
+ //========================================================================
+$(".editable-text-full").editable("Save.php", {
+    type   : 'text',
+    submit : 'Save',
+    cancel : 'Cancel'
+ 
+   
+
+});
+
+// $(".edit_trigger").bind("click", function() {
+//     $(".editable-text-full,this.id ").click();
+
+// });
+//    alert($(this).attr('id'));
+
+
+// $(".edit_trigger").click(function(){
+//   //  $(this).hide();
+
+//   $(".editable-text-full").(function(){
+
+// $((this).attr('id')).editable("Save.php", {
+//     type   : 'text',
+//     submit : 'Save',
+//     cancel : 'Cancle'
+ 
+   
+
+// });
+
+//   }
+
+// }); 
+//==================================================== 
+
+
+
+
+//       $('.editbtn').click(function () {
+        
+//            $(".editable-text-full").editable("Save.php", {
+//     type   : 'text',
+//     submit : 'Save',
+//     cancel : 'Cancle'
+ 
+   
+
+// });    
+     
+
+//       });
+
+
+ 
+/* target as a function example
+$(".editable-text-full").editable(function(input, settings, elem) {
+    console.log(input);
+    console.log(settings);
+    console.log($(elem).data('test'));
+}, {});
+*/
+// $('td:not(.edit)').editable('', {
+//     onblur: 'ignore',
+//     submit: 'ok',
+//     cancel: 'cancel',
+//     width: 75,
+//     event: 'edit'
+// });
+
+// $('td').click(function(e) {
+//     var allEditables = $(this).closest('table').find('td:not(.edit)').get();
+//     $.each(allEditables, function(i, elm) {
+//         elm.reset();
+//     });
+    
+//     $(this).parent().children(':not(.edit)').trigger('edit');
+// });
+</script>
+
+</body>
+</html>
+
+
+
+============================================================================================================
+
+<?php
+// $con = mysqli_connect("localhost","root","","kcftools_SocialMedia");
+
+// // Check connection
+// if (mysqli_connect_errno())
+//   {
+//   echo "Failed to connect to MySQL: " . mysqli_connect_error();
+//   }
+
+
+require_once("config/mysql.class.php");
+$database = new DataBasePDO();
+if(isset($_POST['id'])){
+  $exddd=explode("----",$_POST['id']);
+   $ValueKeyVarableSecond=$_POST['value'];
+$ChangeKeyword2="update DeductionKeywordSandbox SET keyword='$ValueKeyVarableSecond' where KeywordId=".$exddd[1];
+$database->executeQuery($ChangeKeyword2);
+   
+
+  // header( 'refresh: 4; url=http://localhost/sizingandscoring/KeywordPageSecond.php' ); 
+
+   //echo "<script>window.close();</script>";
+   // die();
+   // echo $_POST['id'];
+//header( 'refresh: 1; url=http://localhost/sizingandscoring/KeywordPageSecond.php' );
+
+
+ //echo '<META HTTP-EQUIV="Refresh" Content="0";  url="http://localhost/sizingandscoring/KeywordPageSecond.php" >';
+
+  echo "<script>window.open('KeywordPageSecond.php','_self') </script>"; 
+}
+
+
+
+
+?>
