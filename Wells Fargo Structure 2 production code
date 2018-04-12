@@ -1,0 +1,350 @@
+<?php
+error_reporting(E_ALL);
+ini_set('display_errors', 0);
+// if you are using composer, just use this
+include '/var/www/html/vendor/autoload.php';
+use Gufy\PdfToHtml\Config;
+// change pdftohtml bin location
+Config::set('/usr/bin/pdftohtml.bin', '/var/www/html/poppler-0.51/bin/pdftohtml.exe');
+// change pdfinfo bin location
+Config::set('/usr/bin/pdfinfo.bin', '/var/www/html/poppler-0.51/bin/pdfinfo.exe');
+//copy the conntents of file in the folder
+$url='http://kcftools.domainserver2013.com/salesforce/'.$_GET['type'].'/sizingscoringfiles/'.$_GET["attachmentid"].'/attachment';
+//print_r($url);
+file_put_contents('sourcepdf.pdf',file_get_contents($url));
+// initiate
+$pdf = new Gufy\PdfToHtml\Pdf('sourcepdf.pdf');
+//$pdf = new Gufy\PdfToHtml\Pdf('combine.pdf');
+//print_r($pdf);//die();
+$total_pages = $pdf->getPages();
+//print_r($total_pages);die();
+$html1 = '';
+for($i=1;$i<=$total_pages;$i++){
+	$html = $pdf->html($i);
+	$html1.=$html;	
+}
+//print_r($html1); 
+//create object and call the function.
+$obj = new wellsfargo;
+$finaloutput=$obj->GetDataOFAllMonth($html1);
+if(!empty($finaloutput)){
+	print_r(str_replace("\u00a0","",$finaloutput));
+	$obj->deleteDir('/var/www/html/vendor/gufy/pdftohtml-php/output');
+}else{
+	$finaloutput='';
+	print_r($finaloutput);
+}
+
+class wellsfargo{
+	public $ProcessingVolume;
+	public $Deduction;
+	public function __construct(){
+		//$KeyWords= new KeyWords();
+		$this->globalmonth="";
+		/*$this->Deduction=$KeyWords->DeductionKeyword();
+		$this->CompetitorData=$KeyWords->Competitor();
+		$this->DoNotPickKey=$KeyWords->DoNotPickKey();*/
+	}
+	public function ReplaceChar($text){
+		$text=preg_replace('/\s+/',' ',$text);
+    	$what=array("Â&nbsp;","&nbsp;","$","<b>","</b>","&amp;","*",",","<i>","</i>","(",")");
+    	$which=array("","","","","","and","","","","","","");
+    	$text1=str_replace($what,$which,$text);
+		//print_r($text1);die();
+    	//print_r('coming'.$text);die();&nbsp;&nbsp;&nbsp;
+    	return $text1;
+    }
+    public function keywordsall(){
+		$Keysarray=array();
+	    $Keysarray[0]=json_decode(file_get_contents("http://kcftools.domainserver2013.com/salesforce/sizingandscoring/unikeyword.php"));
+	    $Keysarray[1]=array_slice($Keysarray[0], array_search(" competitorstart ", $Keysarray[0]));
+	    return $Keysarray;
+	}
+	public function DoNotPickKey(){
+		return array(
+				"ATM",
+				"Shopify",
+				"Paypal",
+				"American Express"
+				);
+				
+	}
+	public function GetDataOFAllMonth($html1){
+		$ExtractedMonth=$this->GetDataForAllMonth($html1);
+		$ExtractedMonth=$this->ReplaceChar(preg_replace('/\s+/',' ',$ExtractedMonth));
+		//print_r($ExtractedMonth);die();
+		$CalculateProcessingVolume='';
+		foreach($ExtractedMonth as $ExtractedMonthkey => $ExtractedMonthvalue){
+			//print_r($ExtractedMonthkey.'values ahead'.$ExtractedMonthvalue);
+					
+			$DateAndMonthAndAccountNbr=$this->DateAndMonth($ExtractedMonthvalue);
+			$this->globalmonth=$DateAndMonthAndAccountNbr;
+			$CompleteInfo=$this->GetDataForSections($ExtractedMonthvalue);
+			//print_r($CompleteInfo);
+			$Month=strtotime(str_replace("-","/",$DateAndMonthAndAccountNbr[0]));
+			$month=date("F",$Month);
+			
+			$CalculateProcessingVolume[$month]=$this->ProcessingVolume($CompleteInfo,$DateAndMonthAndAccountNbr);
+			//$CalculateProcessingVolume[$month]["processingvolume"]["BankName"]="WELLS FARGO";
+			//$CalculateProcessingVolume[$month]["processingvolume"]["AccountNumber"]=$DateAndMonthAndAccountNbr[1];
+
+			//print_r($CalculateProcessingVolume);
+		}
+		if(empty($CalculateProcessingVolume)){
+			return '';
+		}
+		$CalculateProcessingVolume["Status"]="success";
+		$CalculateProcessingVolume["Reason"]=null;
+		//print_r($CalculateProcessingVolume);die();
+		//print_r(json_encode($CalculateProcessingVolume));
+		return json_encode($CalculateProcessingVolume);
+		//$CalculateProcessingVolume["Status"]="success";
+		
+
+	}
+	public function GetDataForAllMonth($html1){
+
+		//preg_match_all("/(?<=<b>Your Business)(.*?)(?=To help you BALANCE YOUR CHECKING ACCOUNT)/s",$text,$DateWithMonth);
+		$exd=explode("Questions?",$html1);
+		unset($exd[0]) ;
+		//print_r($exd);die();
+		return $exd;
+	}
+	public function DateAndMonth($html1){
+		preg_match('/ft01">(.*?)Page 2/s', $html1, $Acandmonth);
+		//print_r($Acandmonth);
+		$Acandmonth=explode('</p>', $Acandmonth[0]);
+		$AccountNbr = preg_replace('/[^a-zA-Z0-9\s]/', '', strip_tags($Acandmonth[1]));
+		//print_r($Acandmonth);
+		$DateAndMonth = explode('-',trim(strip_tags($Acandmonth[4])));
+		
+		foreach ($DateAndMonth as $value) {
+			if(strtotime($value)==false){
+				$DateAndMonth = explode('-',trim(strip_tags($Acandmonth[5])));
+				//print_r($DateAndMonth);
+			}
+		}
+		$date1=date("d",strtotime($DateAndMonth[0]));
+		$date2=date("d",strtotime($DateAndMonth[1]));
+		$datemon1=date("m-d-Y",strtotime($DateAndMonth[0]));
+		$datemon2=date("m-d-Y",strtotime($DateAndMonth[1]));
+		if($date1==$date2 && $date1<15){
+			//print_r(array($datemon1,$AccountNbr));
+		    return array($datemon1,$AccountNbr);
+		}else{
+			if($date1>=15){
+				//print_r(array($datemon2,$AccountNbr));
+				return array($datemon2,$AccountNbr);	
+			}else{
+				//print_r(array($datemon1,$AccountNbr));
+				return array($datemon1,$AccountNbr);	
+			}
+		}
+	}
+	public function GetDataForSections($html1){
+		//preg_match('/Activity summary(.*?)ccount number/s', $html1, $match1);
+		//$match1=explode('</p>', $match1[1]);
+		preg_match('/Average ledger balance this period(.*?)ccount number/s', $html1, $match1);
+		$match1=explode('</p>', $match1[1]);
+		$FinalAvgDailyBankBalance = strip_tags($match1[1]);
+
+		preg_match('/Transaction history(.*?)Totals/s', $html1, $transaction);
+		//print_r($transaction);die();
+		//Create a new DOM document
+		$dom = new DOMDocument;
+		//Parse the HTML. The @ is used to suppress any parsing errors
+		//that will be thrown if the $html string isn't valid XHTML.
+		@$dom->loadHTML($transaction[0]);
+		$links = $dom->getElementsByTagName('p');
+		$attributevalues=array();
+		foreach ($links as $link){
+		    //Extract and show the "href" attribute.
+		    $text=$link->textContent;
+		    $attribute=$link->getAttribute('style');
+		    preg_match('/left\:(.*?)px/', $attribute,$match);
+		    if(!empty($match[1])){
+				$arr=array($text , $match[1]);
+			    array_push($attributevalues, $arr);
+			}
+		}
+		//print_r($attributevalues);die()
+		$deposits=array();
+		$withdrawals=array();
+		$dailyendingbalance=array();
+		$we=0;
+		$we1=0;
+		$we2=0;
+		
+		$year=date('Y',strtotime($this->globalmonth[0]));
+		for ($i=0; $i < count($attributevalues); $i++) { 
+			//print_r($attributevalues[$i][0]);
+			if(preg_match('/^([0-9]{1,2})\/([0-9]{1,2})/si',trim($attributevalues[$i][0]))==1){
+				if ($attributevalues[$i+2][1]>700 && $attributevalues[$i+2][1]<780) {
+					
+					$withdrawals[$we]["CDWDate"]=date("m-d-Y",strtotime($attributevalues[$i][0].'/'.$year));
+					$withdrawals[$we]["Description"]=$attributevalues[$i+1][0]; 
+					$withdrawals[$we]["Amount"]=floatval(str_replace(',','' ,$attributevalues[$i+2][0]));
+					$we++;
+				}elseif($attributevalues[$i+2][1]>600 && $attributevalues[$i+2][1]<680){
+					
+					$deposits[$we1]["CDWDate"]=date("m-d-Y",strtotime($attributevalues[$i][0].'/'.$year));
+					$deposits[$we1]["Description"]=$attributevalues[$i+1][0]; 
+					$deposits[$we1]["Amount"]=floatval(str_replace(',','', $attributevalues[$i+2][0]));
+					$we1++;
+				}
+				if(preg_match('/^([0-9]{1,2})\/([0-9]{1,2})/si',$attributevalues[$i+3][0])==0 && $attributevalues[$i+3][1]>800){
+					$dailyendingbalance[$we2]["CDWDate"]=date("m-d-Y",strtotime($attributevalues[$i][0].'/'.$year)); 
+					$dailyendingbalance[$we2]["Amount"]=str_replace(',','',$attributevalues[$i+3][0]);
+					$we2++;
+				}
+				
+			}
+		}
+		//print_r($dailyendingbalance);
+		$fulldetails=array(
+			"Credits"=>$deposits,
+			"Debits"=>$withdrawals,
+			"Daily ledger balance summary"=>$dailyendingbalance,
+			"Average ledger balance this period"=>$FinalAvgDailyBankBalance
+			);
+		//print_r($fulldetails);
+		return $fulldetails;
+	}
+	public function ProcessingVolume($CompleteInfo,$DateAndMonthAndAccountNbr){
+		$keywords=$this->keywordsall();
+		$competitorkeys=$keywords[1];
+		$deductionkeys=$keywords[0];
+		$PAAmount=0;
+		$DeNbrminus=0;
+		$DeNbrPlus=0;
+		$DeductionAmount=0;
+		$Descritionfound='';
+		foreach($CompleteInfo["Credits"] as $AmountSum){
+			$PAAmount+=$AmountSum["Amount"];			
+			//print_r($AmountSum["Description"]."\n");
+			//print_r(strtolower($AmountSum["Description"])."\n");
+			foreach($deductionkeys as $DoNoConsiderkey => $DoNoConsidervalue){
+				//print_r($DoNoConsidervalue."\n");die();
+			    $description=" ".strtolower($AmountSum["Description"])." ";
+			    $DoNoConsidervalueSmall=strtolower($DoNoConsidervalue);
+			    //print_r($DoNoConsidervalueSmall."\n");
+			    if(strpos($description,$DoNoConsidervalueSmall) !== false){
+			    	//print_r($DoNoConsidervalueSmall);die();
+				    if(trim($DoNoConsidervalueSmall)=='transfer credit'){
+				        if(strpos($description,'dba') !== false){
+				            
+				        }else{
+				            continue;
+				        }
+				    }
+
+			        $DoNotStatus=true;
+			        $donotpickkey=$this->DoNotPickKey();
+			        //print_r($donotpickkey);die();
+	    			foreach($donotpickkey as $DoNotPickKeyKEY => $DoNotPickKeyVALUE){
+	    			    $DoNotPickKeyVALUESmall=strtolower($DoNotPickKeyVALUE);
+    				    if(strpos($description,$DoNotPickKeyVALUESmall) !== false){
+        					$DoNotStatus=false;
+    				    }
+	    			}
+				    if($DoNotStatus){
+				        $DeNbrminus++;
+    					$DeductionAmount+=$AmountSum["Amount"];
+    					$Descritionfound.=$DoNoConsidervalue.",";
+    					break;
+				    }
+				}
+			}
+			$DeNbrPlus++;
+		}
+		
+		//die();
+		$AvgNumberofMonthlyDeposits=$DeNbrPlus-$DeNbrminus;
+		$NumofDailyNegatives=0;
+		$AvgDailyBankBalance=0;
+		foreach($CompleteInfo["Daily ledger balance summary"] as $NumNegatives){
+			if($NumNegatives["Amount"]<0){
+				$NumofDailyNegatives++;
+			}
+			$AvgDailyBankBalance+=$NumNegatives["Amount"];
+
+		}
+		//$SizeOf=sizeof($CompleteInfo["Daily ledger balance summary"]);
+		//$FinalAvgDailyBankBalance=$AvgDailyBankBalance/$SizeOf;
+		//print_r($CompleteInfo);die();
+
+
+		$FoundCompititor1=array();
+		$Amount=array();
+		$keyCom=0;
+		foreach($CompleteInfo["Debits"] as $keyc=>$CompetitorSection){
+			foreach($competitorkeys as $compkey => $compvalue){
+				if(strpos(strtolower($CompetitorSection["Description"]),strtolower($compvalue)) !== false){
+					$FoundCompititor1[$keyCom]=$CompetitorSection;
+					$FoundCompititor1[$keyCom]["Name"]=$compvalue;
+					//$FoundCompititor1[$keyCom]["CompetitorId"]=$compvalue->Id;
+					$keyCom++;
+					//print_r($FoundCompititor1);die();
+				}
+			}
+		}
+
+		$Month=strtotime(str_replace("-","/",$DateAndMonthAndAccountNbr[0]));
+		$month=date("F",$Month);
+		
+		if(!empty($CompleteInfo["Average ledger balance this period"])){
+			$AverageNbrt=$CompleteInfo["Average ledger balance this period"];
+		}else{
+			$AverageNbrt=null;
+		}
+		//$FinalJson=array();	
+		//$FinalJson["processingvolume"]["Month"]=$DateAndMonthAndAccountNbr[0];
+		$FinalJson["processingvolume"]["Month"]=substr_replace($DateAndMonthAndAccountNbr[0],'01',3,2);
+		$FinalJson["processingvolume"]["Amount"]=$PAAmount;
+		$FinalJson["processingvolume"]["AmountDeductions"]=$PAAmount-$DeductionAmount;
+		$FinalJson["processingvolume"]["NumofDailyNegatives"]=$NumofDailyNegatives;
+		$FinalJson["processingvolume"]["AvgNumberofMonthlyDeposits"]=$AvgNumberofMonthlyDeposits;
+		$FinalJson["processingvolume"]["AvgDailyBankBalance"]=$AverageNbrt;
+		$FinalJson["processingvolume"]["BankName"]="WELLS FARGO";
+		$FinalJson["processingvolume"]["AccountNumber"]=$DateAndMonthAndAccountNbr[1];
+		$FinalJson["deduction"]["Month"]=substr_replace($DateAndMonthAndAccountNbr[0],'01',3,2);//$DateAndMonthAndAccountNbr[0];
+		$FinalJson["deduction"]["Amount"]=$DeductionAmount;
+		$FinalJson["deduction"]["Type"]=substr_replace($DateAndMonthAndAccountNbr[0],'01',3,2)."-".$PAAmount;
+		$FinalJson["deduction"]["Description"]=trim(implode(',',array_unique(explode(',', $Descritionfound))),","); //trim($Descritionfound,",");
+		$FinalJson["deduction"]["BankName"]="WELLS FARGO";
+		$FinalJson["deduction"]["AccountNumber"]=$DateAndMonthAndAccountNbr[1];
+		$FinalJson["competitor"]=$FoundCompititor1;
+		$FinalJson["EWithDrawals"]=$CompleteInfo["Debits"];
+		$FinalJson["DailySummary"]=$CompleteInfo["Daily ledger balance summary"];
+		$FinalJson["ADeposits"]=$CompleteInfo["Credits"];
+		
+		//print_r(json_encode($FinalJson));die();
+		//print_r($FinalJson);
+		return $FinalJson;
+	}
+
+	public function deleteDir($dirPath) {
+        if (!is_dir($dirPath)) {
+            throw new InvalidArgumentException("$dirPath must be a directory");
+        }
+        if (substr($dirPath, strlen($dirPath) - 1, 1) != '/') {
+            $dirPath .= '/';
+        }
+        $files = scandir($dirPath); 
+        foreach ($files as $file) {
+            if ($file === '.' || $file === '..') continue;
+            if (is_dir($dirPath.$file)) {
+                $this->deleteDir($dirPath.$file);
+            } else {
+                if ($dirPath.$file !== __FILE__) {
+                    unlink($dirPath.$file);
+                }
+            }
+        }
+        rmdir($dirPath);
+    }
+
+}	
+
+//print_r($monval);
+?>
