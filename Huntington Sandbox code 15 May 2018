@@ -1,0 +1,472 @@
+<?php
+include "keywords.php";
+class Huntington{
+	  public $ProcessingVolume;
+  public $Deduction;
+//   public function __construct(){
+//     $KeyWords= new KeyWords();
+//     $this->globalmonth="";
+//     $this->Deduction=$KeyWords->DeductionKeyword();
+//     $this->CompetitorData=$KeyWords->Competitor();
+//     $this->DoNotPickKey=$KeyWords->DoNotPickKey();
+//   }
+	public function __construct($consvar){
+		$KeyWords= new KeyWords();
+		$this->globalmonth="";
+	//	$this->Deduction=$KeyWords->DeductionKeyword();
+	    $this->Deduction=$KeyWords->DeductionKeyword2($consvar);
+		$this->CompetitorData=$KeyWords->Competitor();
+		$this->DoNotPickKey=$KeyWords->DoNotPickKey();
+	}
+
+   public function GetDataOFAllMonth($text){
+   //	print_r($text);
+  $MonthsArray = array();
+   	  $ExtractedMonth=$this->GetDataForAllMonth($text);
+   	 $CalculateProcessingVolume=array();
+     foreach($ExtractedMonth as $ExtractedMonthkey => $ExtractedMonthvalue){
+           $DateAndMonthAndAccountNbr=$this->DateAndMonth($ExtractedMonthvalue);
+     //      print_r($DateAndMonthAndAccountNbr);
+           $tempvar=substr($DateAndMonthAndAccountNbr[0],-4);
+		   $tempvar='/'.$tempvar;
+         $CompleteInfo=$this->GetDataForSections($ExtractedMonthvalue,$tempvar);
+         $Month=strtotime(str_replace("-","/",$DateAndMonthAndAccountNbr[0]));
+        $month=date("F",$Month);
+       //   print_r($month."--------------------------------------->MONTH");
+          
+          if (in_array($month, $MonthsArray)){continue;  //print_r('Inside If');
+              
+          }
+          array_push($MonthsArray, $month);
+          
+         $CalculateProcessingVolume[$month]=$this->ProcessingVolume($CompleteInfo,$DateAndMonthAndAccountNbr);
+         $CalculateProcessingVolume[$month]["processingvolume"]["BankName"]="Huntington Bank";
+        $CalculateProcessingVolume[$month]["processingvolume"]["AccountNumber"]=$DateAndMonthAndAccountNbr[1];
+        $CalculateProcessingVolume[$month]["deduction"]["BankName"]="Huntington Bank";
+        $CalculateProcessingVolume[$month]["deduction"]["AccountNumber"]=$DateAndMonthAndAccountNbr[1];
+  }
+      $CalculateProcessingVolume["Status"]="success";
+      $CalculateProcessingVolume["Reason"]=null;
+   // print_r($CalculateProcessingVolume);
+    return $CalculateProcessingVolume;
+   }
+   
+   public function GetDataForAllMonth($text){
+		if(strpos($text,"Statement Activity From:")!== false){
+    		$exd=explode("Statement Activity From:",$text);
+    	//	print_r($exd);die();
+    		unset($exd[0]) ;
+		}
+
+	//	print_r($exd);
+		return $exd;
+
+}
+
+  public function DateAndMonth($text){
+     // print_r($text);
+     preg_match('/Account: \d{10,}/', $text, $Acandmonth);       // print_r($Acandmonth);
+     preg_match('/\d{10,}/', $Acandmonth[0], $Acandmonth2);      // print_r($Acandmonth2);
+     $AccountNbr=trim($Acandmonth2[0]);                          //print_r($AccountNbr);
+      preg_match('/\d{1} \d{1} \/ \d{1} \d{1} \/ \d{1} \d{1} to \d{1} \d{1} \/ \d{1} \d{1} \/ \d{1} \d{1}/', $text, $DateAndMonth);
+     //  print_r($DateAndMonth);
+       if(empty($DateAndMonth)){
+           preg_match('/\d{1} \d{1}\/ \d{1}\d{1}\/\d{1}\d{1} to \d{1} \d{1}\/ \d{1}\d{1} \/\d{1}\d{1}/', $text, $DateAndMonth);//1 0/ 01/16 to 1 0/ 31 /16<br> 
+     //  print_r($DateAndMonth);
+               if(empty($DateAndMonth)){
+                    preg_match('/\d{2}\/\d{2}\/\d{2}/', $text, $DateAndMonth);  //11/01/17 00P29000001W4jZEAS
+                   // print_r($DateAndMonth);
+                    $dateBoldFormat=date("m-d-Y",strtotime(trim($DateAndMonth[0]))); //print_r($dateBoldFormat);
+                     return array($dateBoldFormat,$AccountNbr);
+               }
+       }
+       
+       $date=$DateAndMonth[0]; // print_r($date);
+       $date=str_replace(" ","",$date);  // print_r($date);
+       $exdd=explode("to",$date);    // print_r($exdd);
+       $date1=date("m-d-Y",strtotime($exdd[0]));
+       $date2=date("m-d-Y",strtotime($exdd[1]));  //print_r($date1);print_r($date2);
+       if($date1==$date2){
+			//print_r(array($date1,$AccountNbr));
+		    return array($date1,$AccountNbr);
+		}else{
+			//print_r(array($date2,$AccountNbr));
+		    return array($date2,$AccountNbr);
+		}
+  }
+  
+   public function GetDataForSections($text,$tempvar){
+       $var="Checkss";
+       if (strpos($text, "Checks (-)") !== false){
+        $text=str_replace("Checks (-)","Checkss 9a79dz1Hc",$text);
+         //	print_r('Yes Checks Are present');  
+        }else{  $var="Other Debits";  }	
+  //---------------------------------------------------------------------------------------- 
+    $varSecond="Service Charge Detail";
+      if(strpos($text, "Service Charge Detail") !== false){
+      
+        }elseif(strpos($text, "Service Charge Summary") !== false){
+            $varSecond="Service Charge Summary";
+        }else{ $varSecond="Balance Activity";  }
+  //-----------------------------------------------------------------------------------------
+     $varThird="In<br> the<br> Event<br> of<br> Errors";
+     if(strpos($text, "In<br> the<br> Event<br> of<br> Errors") === false){
+            $text=$text.'9a79dz1Hc';
+             $varThird=substr($text,-9); 
+        }
+  //-----------------------------------------------------------------------------------------Other Debits (-)
+  $varFourth="Other Debits";
+   if(strpos($text, "Other Debits (-)") !== false){
+        //  $text=str_replace("Other Debits (-)","Debitsssh5y84gnf1",$text);
+        //   $varFourth="Debitsssh5y84gnf1";  //print_r('Yes Debits Are present');  
+         
+        }
+        
+        if(strpos($text, "Deposit / Credit Activity") !== false){
+          // print_r('Inside Second Structure if------------------------------');
+          $var5="Check Activity";
+          if(strpos($text, "Check Activity") === false){
+              $var5="ATM Withdrawal Activity";
+          }
+          
+        $Sections=array(
+            0=>array("StartSection"=>"Deposit \/ Credit Activity","EndSection"=>$var5,"ColumnCount"=>4),
+            1=>array("StartSection"=>"Other Withdrawal \/ Debit Activity","EndSection"=>"Balance Activity","ColumnCount"=>4),
+            2=>array("StartSection"=>"Beginning Balance","EndSection"=>"Deposit \/ Credit Activity","ColumnCount"=>5)// For average leadger balance
+            
+            );
+       }else{
+           $Sections=array(
+           0=>array("StartSection"=>"Beginning Balance","EndSection"=>"Ending Balance","ColumnCount"=>0),
+           1=>array("StartSection"=>"Ending Balance","EndSection"=>$var,"ColumnCount"=>1),
+           2=>array("StartSection"=>$varFourth,"EndSection"=>$varSecond,"ColumnCount"=>2),
+           3=>array("StartSection"=>"Balance Activity","EndSection"=>$varThird,"ColumnCount"=>3)
+           );
+       }   
+           foreach($Sections as $Sectionskey=>$Sectionsvalue){
+    		preg_match("/(?<=".$Sectionsvalue['StartSection'].")(.*?)(?=".$Sectionsvalue['EndSection'].")/s",$text,$SectionExtracted);
+    	//	print_r($SectionExtracted[0]);
+    		$sectionrt=$SectionExtracted[0];
+    			if($Sectionsvalue['StartSection']===$varFourth) {$Sectionsvalue['StartSection']="Other Debits";}
+    			else if($Sectionsvalue['StartSection']==="Deposit \/ Credit Activity"){$Sectionsvalue['StartSection']="Ending Balance";}
+    			else if($Sectionsvalue['StartSection']==="Other Withdrawal \/ Debit Activity") {$Sectionsvalue['StartSection']="Other Debits";}
+    	
+    		$data[$Sectionsvalue['StartSection']]=$this->IndividualSectionParser($sectionrt,$Sectionsvalue["ColumnCount"],$tempvar);//Here the array comes from function and becomes the second member of Start section
+    		//print_r($data);
+    	}
+    	//	print_r($data);//die();
+		return $data;
+		
+       
+   }
+   
+    public function IndividualSectionParser($SectionList,$ColumnCount,$tempvar){
+          preg_match_all("/(?:<br>)([\s\S]*?)(?=<br>)/s",$SectionList,$brList);
+ //     print_r($brList);
+      $brList=$brList[1];   //print_r($brList);
+      $SectionData="";
+      if($ColumnCount==0){
+    		$SectionData=$this->commonparser0($brList);
+    	}elseif($ColumnCount==1){
+        $SectionData=$this->commonparser1($brList,$tempvar);
+       }elseif($ColumnCount==2){
+			$SectionData=$this->commonparser2($brList,$tempvar);
+		}elseif($ColumnCount==3){
+			$SectionData=$this->commonparser3($brList,$tempvar);
+		}elseif($ColumnCount==4){
+			$SectionData=$this->commonparser4($brList,$tempvar);
+		}elseif($ColumnCount==5){
+			$SectionData=$this->commonparser5($brList,$tempvar);
+		}
+      
+      	return $SectionData; 
+    }
+    
+    public function commonparser5($brList,$tempvar){
+     //   print_r($brList);
+         $we=0;   //print_r($brList);	
+        $summaryinfo=array();
+        for($i=0;$i<sizeof($brList);$i++){
+              if (strpos($brList[$i], "Average Balance") !== false){
+                  $summaryinfo[$we]['Daily Ledger Balance']=$brList[$i+1]; 
+                //   if (!is_numeric(trim($brList[$i+1]))){
+                //      $summaryinfo[$we]['Daily Ledger Balance']=$brList[$i+2];   
+                //   }
+                  
+         	        break;
+              }
+        }	
+     //     print_r($summaryinfo);	
+        		return $summaryinfo;
+        
+    }
+    
+    public function commonparser4($brList,$tempvar){
+       // print_r($brList);
+          $AllList=$brList;
+		$CommonArray=array(); 
+		$we=0;  	$TotalDepositAmount=0;
+		for($i=0;$i<sizeof($AllList);$i++){
+			$Alllistfor=strip_tags($AllList[$i]);
+//		print_r($Alllistfor);die();
+			if(preg_match("/^\d{2}\/\d{2}/",trim($Alllistfor)) && strtotime(trim($Alllistfor))){
+			//	print_r($Alllistfor);die();
+			//	print_r($AllList[$i+3]);die();
+				if(!empty($AllList[$i+3]))if(preg_match("/^\d{2}\/\d{2}/",trim(strip_tags($AllList[$i+3])))){$extraLineData='';}else{$extraLineData=strip_tags($AllList[$i+3]);}
+				$CommonArray[$we]["DatePosted"]=date("m-d-Y",strtotime(trim(strip_tags($AllList[$i].$tempvar))));
+			
+			
+				$CommonArray[$we]["Description"]=trim(strip_tags(($AllList[$i+1]))).$extraLineData;
+				$CommonArray[$we]["Amount"]=trim(strip_tags($AllList[$i+2]));
+			if(!empty($extraLineData) && is_numeric(trim($extraLineData)) ){ 	$CommonArray[$we]["Amount"]=trim($extraLineData);  }
+			
+				if(!is_numeric ($CommonArray[$we]["Amount"])){
+				   unset($CommonArray[$we]);
+				}
+				
+                $TotalDepositAmount+=trim(strip_tags($AllList[$i+2]));
+				$we++;
+			}
+		}
+     //   print_r($TotalDepositAmount); 
+     //   print_r($CommonArray);
+        return $CommonArray;
+        
+    }
+    
+    public function commonparser0($brList){
+               $we=0;  // print_r($brList);	
+        $summaryinfo=array();
+        for($i=0;$i<sizeof($brList);$i++){
+              if (strpos($brList[$i], "Average Ledger Balance") !== false){
+                  $summaryinfo[$we]['Daily Ledger Balance']=$brList[$i+1]; 
+                  if (strpos( $summaryinfo[$we]['Daily Ledger Balance'], '-') !== false) { //str_replace("-","/",$DateAndMonthAndAccountNbr[0])
+                      $LeadgerBalanceVar="-".trim(str_replace("-","",$brList[$i+1]));
+                      // print_r($LeadgerBalanceVar);die();
+                  $summaryinfo[$we]['Daily Ledger Balance']=$LeadgerBalanceVar;
+                   }
+                  if (!is_numeric(str_replace("-","",trim($brList[$i+1])))){
+                     $summaryinfo[$we]['Daily Ledger Balance']=$brList[$i+2];   
+                  }
+                  
+         	        break;
+              }
+        }	
+     //     print_r($summaryinfo);	
+        		return $summaryinfo;
+    }
+    
+    public function commonparser1($brList,$tempvar){
+        // print_r($brList);	
+            $AllList=$brList;
+		$CommonArray=array(); 
+		$we=0;  	$TotalDepositAmount=0;
+		for($i=0;$i<sizeof($AllList);$i++){
+			$Alllistfor=strip_tags($AllList[$i]);
+//		print_r($Alllistfor);die();
+			if(preg_match("/^\d{2}\/\d{2}/",trim($Alllistfor)) && strtotime(trim($Alllistfor))){
+			//	print_r($Alllistfor);die();
+			//	print_r($AllList[$i+3]);die();
+				if(!empty($AllList[$i+3]))if(preg_match("/^\d{2}\/\d{2}/",trim(strip_tags($AllList[$i+3])))){$extraLineData='';}else{$extraLineData=strip_tags($AllList[$i+3]);}
+				$CommonArray[$we]["DatePosted"]=date("m-d-Y",strtotime(trim(strip_tags($AllList[$i].$tempvar))));
+			
+			
+				$CommonArray[$we]["Description"]=trim(strip_tags(($AllList[$i+2]))).$extraLineData;
+				$CommonArray[$we]["Amount"]=trim(strip_tags($AllList[$i+1]));
+                $TotalDepositAmount+=trim(strip_tags($AllList[$i+1]));
+				$we++;
+			}
+		}
+     //   print_r($TotalDepositAmount); 
+     //   print_r($CommonArray);
+        return $CommonArray;
+         
+    }
+    
+     public function commonparser2($brList,$tempvar){
+       //   print_r($brList);	
+       $Key=0;
+       foreach($brList as $Sectionskey=>$Sectionsvalue){
+                 if (strpos($Sectionsvalue, "Other Debits (-)") !== false){
+                      $Key=$Sectionskey;
+                      break;
+                 }
+    			}
+    //    print_r($Key);
+        
+          $AllList=array_slice($brList,$Key);
+          // print_r($AllList);
+		$CommonArray=array(); 
+		$we=0;  	$TotalDepositAmount=0;
+		for($i=0;$i<sizeof($AllList);$i++){
+			$Alllistfor=strip_tags($AllList[$i]);
+//		print_r($Alllistfor);die();
+			if(preg_match("/^\d{2}\/\d{2}/",trim($Alllistfor)) && strtotime(trim($Alllistfor))){
+			//	print_r($Alllistfor);die();
+			//	print_r($AllList[$i+3]);die();
+				if(!empty($AllList[$i+3]))if(preg_match("/^\d{2}\/\d{2}/",trim(strip_tags($AllList[$i+3])))){$extraLineData='';}else{$extraLineData=strip_tags($AllList[$i+3]);}
+				$CommonArray[$we]["DatePosted"]=date("m-d-Y",strtotime(trim(strip_tags($AllList[$i].$tempvar))));
+			
+			
+				$CommonArray[$we]["Description"]=trim(strip_tags(($AllList[$i+2]))).$extraLineData;
+				$CommonArray[$we]["Amount"]=trim(strip_tags($AllList[$i+1]));
+              
+				$we++;
+			}
+		}
+    
+     //   print_r($CommonArray);
+        return $CommonArray;
+         
+     }
+     
+     public function commonparser3($brList,$tempvar){
+        // print_r($brList);
+                 $AllList=$brList;
+         $we=0;
+        	for($i=0;$i<sizeof($AllList);$i++){
+			$Alllistfor=strip_tags($AllList[$i]);
+//		print_r($Alllistfor);die();
+			if(preg_match("/\d{2}\/\d{2}/",trim($Alllistfor)) && strtotime(trim($Alllistfor))){
+		
+				$CommonArray[$we]["CDWDate"]=date("m-d-Y",strtotime(trim($Alllistfor.$tempvar)));
+		
+				$CommonArray[$we]["Amount"]=trim(strip_tags($AllList[$i+1]));
+               if (strpos($CommonArray[$we]["Amount"], "-") !== false){
+                  $Temp=str_replace("-","",$CommonArray[$we]["Amount"]);
+         
+                  $Temp='-'.$Temp;
+                  $CommonArray[$we]["Amount"]=$Temp;
+                 
+                }
+
+				$we++;
+			}
+		}
+//	 print_r($CommonArray);
+        return $CommonArray;
+         
+     }
+     
+      public function ProcessingVolume($CompleteInfo,$DateAndMonthAndAccountNbr){
+            $DoNoConsider=$this->Deduction;
+         $DoNotPickKey=$this->DoNotPickKey;
+       //   print_r($DoNoConsider);
+       
+        $PAAmount=0;
+        $DeNbrminus=0;
+        $DeNbrPlus=0;
+        $DeductionAmount=0;
+        $Descritionfound='';
+          foreach($CompleteInfo["Ending Balance"] as $AmountSum){
+      $PAAmount+=$AmountSum["Amount"];
+      //print_r($PAAmount);die();     
+      //print_r($AmountS"Description"]."\n");
+      //print_r(strtolower($AmountSum["Description"])."\n");
+      //print_r($DoNoConsider);um[
+      foreach($DoNoConsider as $DoNoConsiderkey => $DoNoConsidervalue){
+          $description=" ".strtolower($AmountSum["Description"])." ";
+          $DoNoConsidervalueSmall=strtolower($DoNoConsidervalue);
+          
+          if(strpos($description,$DoNoConsidervalueSmall) !== false){
+            //print_r($description);
+            if(trim($DoNoConsidervalueSmall)=='transfer credit'){
+                if(strpos($description,'dba') !== false){
+                    
+                }else{
+                    continue;
+                }
+            }
+                //    print_r($description);
+              $DoNotStatus=true;
+ 	if(!$DoNoConsidervalueSmall==='reimbursement' || !$DoNoConsidervalueSmall==='return' ||  !$DoNoConsidervalueSmall==='refund' ||   !$DoNoConsidervalueSmall==='returned' ){	                     
+            foreach($DoNotPickKey as $DoNotPickKeyKEY => $DoNotPickKeyVALUE){
+                $DoNotPickKeyVALUESmall=strtolower($DoNotPickKeyVALUE);
+                 //print_r($DoNotPickKeyVALUESmall);
+                if(strpos($description,$DoNotPickKeyVALUESmall) !== false){
+                  $DoNotStatus=false;
+                }
+            }
+ 	}       
+            if($DoNotStatus){
+             // print_r($description);
+                $DeNbrminus++;
+              $DeductionAmount+=$AmountSum["Amount"];
+              $Descritionfound.=$DoNoConsidervalue.",";
+              //print_r($Descritionfound);
+              break;
+            }
+        }
+      }
+      $DeNbrPlus++;
+    }
+     $AvgNumberofMonthlyDeposits=$DeNbrPlus-$DeNbrminus;
+    $NumofDailyNegatives=0;
+    $AvgDailyBankBalance=0;
+    if(!empty($CompleteInfo["Balance Activity"])){
+    	foreach($CompleteInfo["Balance Activity"] as $NumNegatives){
+			if (strpos($NumNegatives["Amount"], "-") !== false){				
+				$NumofDailyNegatives++;				
+			} 
+			
+		}
+    }	
+		
+		
+		$AvgDailyBankBalance=trim($CompleteInfo["Beginning Balance"][0]["Daily Ledger Balance"]);
+    // print_r($CompleteInfo);
+         $FoundCompititor1=array();
+    $Amount=array();
+    $keyCom=0;
+    foreach($CompleteInfo["Other Debits"] as $keyc=>$CompetitorSection){
+      foreach($this->CompetitorData as $compkey => $compvalue){
+        if(strpos(strtolower($CompetitorSection["Description"]),strtolower($compvalue->Name)) !== false){
+          $FoundCompititor1[$keyCom]=$CompetitorSection;
+          $FoundCompititor1[$keyCom]["Name"]=$compvalue->Name;
+          $FoundCompititor1[$keyCom]["CompetitorId"]=$compvalue->Id;
+          $keyCom++;
+        }
+      }
+    }
+    
+         if (strpos($DateAndMonthAndAccountNbr[0], "12-31-1969") !== false){
+             $EndVar=end($CompleteInfo["Ending Balance"]); // print_r($EndVar["DatePosted"]);str_replace(find,replace,string,count)
+          $DateAndMonthAndAccountNbr[0]=str_replace("1969","2017",$EndVar["DatePosted"]);  //  print_r($DateAndMonthAndAccountNbr[0]); substr($myStr, 0, 5);
+          $Statmentmonth=substr($DateAndMonthAndAccountNbr[0], 0, 2);  
+    //          print_r($Statmentmonth." \n");
+                  $now = new \DateTime('now');
+  $month2 = $now->format('m');
+ //  print_r($month2." \n");
+   // $CurrentYear = $now->format('y');
+             $CurrentYear =date('Y');
+  //  print_r($CurrentYear." \n");
+       if($month2==$Statmentmonth){$DateAndMonthAndAccountNbr[0]=str_replace("2017",$CurrentYear,$DateAndMonthAndAccountNbr[0]);
+       }elseif($month2<$Statmentmonth){$DateAndMonthAndAccountNbr[0]=str_replace("2017",$CurrentYear-1,$DateAndMonthAndAccountNbr[0]);
+    }elseif($month2>$Statmentmonth){$DateAndMonthAndAccountNbr[0]=str_replace("2017",$CurrentYear,$DateAndMonthAndAccountNbr[0]);  }
+    
+}
+
+    $FinalJson=array();//substr_replace(string,replacement,start,length)
+    $FinalJson["processingvolume"]["Month"]=substr_replace($DateAndMonthAndAccountNbr[0],'01',3,2);
+    $FinalJson["processingvolume"]["Amount"]=$PAAmount;
+    $FinalJson["processingvolume"]["AmountDeductions"]=$PAAmount-$DeductionAmount;
+    $FinalJson["processingvolume"]["NumofDailyNegatives"]=$NumofDailyNegatives;
+    $FinalJson["processingvolume"]["AvgNumberofMonthlyDeposits"]=$AvgNumberofMonthlyDeposits;
+    $FinalJson["processingvolume"]["AvgDailyBankBalance"]=$AvgDailyBankBalance;
+    $FinalJson["deduction"]["Month"]=substr_replace($DateAndMonthAndAccountNbr[0],'01',3,2);
+    $FinalJson["deduction"]["Amount"]=$DeductionAmount;
+    $FinalJson["deduction"]["Type"]=substr_replace($DateAndMonthAndAccountNbr[0],'01',3,2)."-".$PAAmount;
+    $FinalJson["deduction"]["Description"]=trim(implode(',',array_unique(explode(',', $Descritionfound))),","); //trim($Descritionfound,",");
+    $FinalJson["competitor"]=$FoundCompititor1;
+//    $FinalJson["EWithDrawals"]=$CompleteInfo["Card Purchases"];
+    $FinalJson["DailySummary"]=$CompleteInfo["Balance Activity"];                                    
+    $FinalJson["ADeposits"]= $CompleteInfo["Ending Balance"];                                            
+    $FinalJson["EWithDrawals"]=$CompleteInfo["Other Debits"];
+   // print_r($FinalJson);
+    return $FinalJson;
+        
+      }
+
+}
+
+?>
