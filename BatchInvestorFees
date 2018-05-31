@@ -1,0 +1,73 @@
+//Create BB Fee for Investor 
+public class BatchInvestorFees implements Database.Batchable<SObject> {    
+
+    public Database.QueryLocator start(Database.BatchableContext bc) {
+        return Database.getQueryLocator(Label.BatchInvestorFees);
+    }
+
+    public void execute(Database.BatchableContext bc, List<Account> scope){
+        
+        BorrowingBase_Fees__c[]  borrowingBaseFeeToInsert = new BorrowingBase_Fees__c[]{};
+        Map<String, Date> accountInterestPaymentDate = new Map<String, Date>();
+        for(Account account : scope){
+            borrowingBaseFeeToInsert.add(new BorrowingBase_Fees__c (
+                                    Investor__c = account.id,
+                                    BB_Applicable_Margin__c = 
+                                        account.BB_Applicable_Margin__c, 
+                                    BB_Backup_Servicing_Monthly_Dollar_Fee__c = 
+                                        account.BB_Backup_Servicing_Monthly_Dollar_Fee__c, 
+                                    BB_Interest_Make_Whole__c = 
+                                        account.BB_Interest_Make_Whole__c,
+                                    BB_Non_Use_Fee_Percent__c = 
+                                        account.BB_Non_Use_Fee_Percent__c,
+                                    BB_Revolving_Commitments__c = 
+                                        account.BB_Revolving_Commitments__c,
+                                    BB_Servicing_Fee_Percent__c = 
+                                        account.BB_Servicing_Fee_Percent__c,
+                                    BB_Verification_Agent_Monthly_Dollar_Fee__c = 
+                                        account.BB_Verification_Agent_Monthly_Dollar_Fee__c
+                                    ));
+            accountInterestPaymentDate.put(account.Id, 
+                                            account.BB_Interest_Payment_Date__c.toStartOfMonth());
+        }
+        
+        if(borrowingBaseFeeToInsert.size() != 0)    insert borrowingBaseFeeToInsert;
+      
+    }
+    
+    public void finish(Database.BatchableContext bc) {}
+
+    static Map<String, Map<String, Decimal>> getBBInterestPayment(Map<String, Date> 
+                                                            accountInterestPaymentDate){
+        Map<String, Map<String, Decimal>> accountWithMonhtlyInterest = new 
+                                        Map<String, Map<String, Decimal>> ();
+
+        for(Account account : [SELECT Id, (SELECT Id, BB_Facility_Cumulative_Fee__c, 
+                                            BB_Submission_Status__c FROM 
+                                            Borrowing_Base_Configurations__r
+                                            WHERE CreatedDate >=:
+                                            accountInterestPaymentDate.values()
+                                            AND BB_Facility_Cumulative_Fee__c > 0
+                                            ORDER BY LastModifiedDate LIMIT 1)
+                                            FROM Account WHERE Id IN: 
+                                            accountInterestPaymentDate.keySet()]){
+                                                
+            if(!accountWithMonhtlyInterest.containsKey(account.Id)) 
+                accountWithMonhtlyInterest.put(account.Id, 
+                                            new Map<String, Decimal>());
+
+            List<Borrowing_Base_Configuration__c> configs = account.Borrowing_Base_Configurations__r;
+            for(Borrowing_Base_Configuration__c bbConfig : configs){
+                String monthYear = bbConfig.CreatedDate.date().month() + '-' +
+                                    bbConfig.CreatedDate.date().year();
+                Map<String, Decimal> monthlyInterest = accountWithMonhtlyInterest.get(account.Id);
+                if(!monthlyInterest.containsKey(monthYear))
+                    monthlyInterest.put(monthYear, 0);
+                monthlyInterest.put(monthYear, 
+                                monthlyInterest.get(monthYear)+bbConfig.BB_Facility_Cumulative_Fee__c);
+                accountWithMonhtlyInterest.put(account.Id, monthlyInterest);
+            }
+        }
+        return accountWithMonhtlyInterest;
+    }
+}
