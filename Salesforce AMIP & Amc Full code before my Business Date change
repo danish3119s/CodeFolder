@@ -1,0 +1,1191 @@
+<apex:page controller="SalesforceAMIP"  sidebar="true" showHeader="true" id="pageid"  standardStylesheets="true" docType="html-5.0">
+     <head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+    <!--<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" />-->
+    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
+    <apex:stylesheet value="https://code.jquery.com/ui/1.10.3/themes/smoothness/jquery-ui.css"  />
+    <apex:includeScript value="https://code.jquery.com/jquery-1.9.1.js" />
+    <apex:includeScript value="https://code.jquery.com/ui/1.10.3/jquery-ui.js" />
+    </head>
+    <style>
+        .colstyle1 {width:16.5%}
+        .colstyle2 {
+            width:15%;
+            margin: 2px 2px 4px 2px;
+            padding: 2px 2px 2px 2px;
+        }
+        .changecolor .pbSubheader{ 
+            background-color:#2e9cb2;
+        }
+        .fixSize{
+           width: 180px;
+           margin: 0px auto;
+        }
+        .showCal{
+        }
+        .modal {
+            position:   fixed;
+            z-index:    1000;
+            top:        0;            
+            left:       0;
+            height:     100%;
+            width:      100%;
+            background: rgba( 255, 255, 255, .8 ) 
+            url('/img/loading.gif') 
+            50% 50% 
+            no-repeat;  
+        } 
+        
+        #overlay {
+        position: fixed;
+        display: none;
+        width: 100%;
+        height: 100%;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0,0,0,0.5);
+        z-index: 2;
+        cursor: pointer;
+    }
+    
+    #text{
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 40%;
+        font-size: 10px;
+        color: black;
+        background:#f4f5f7;
+        border-style: solid;
+        border-width: 2px;
+        border-color: #46d6d6;
+        transform: translate(-50%,-50%);
+        -ms-transform: translate(-50%,-50%);
+    }
+    .textInner {
+            margin: 2px 2px 4px 2px;
+            padding: 2px 2px 2px 2px;
+        }
+     .col1 {width:auto; text-align:left;padding-right:15px;}
+     .col2 {width:auto; text-align:left;padding-right:15px;}   
+     
+    </style>
+    <script type="text/javascript">
+        j$ = jQuery.noConflict();
+        j$(document).ready(function() 
+            {
+            j$('[id$=payoff4]').datepicker(   
+            {   defaultDate: "", 
+                changeMonth: true,
+                changeYear: true,
+                numberOfMonths: 1,
+                yearRange: '1900:2060',
+                dateFormat:"mm/dd/yy",  
+                altFormat: "mm/dd/yy", 
+                showAnim: "slideDown" 
+            });
+            
+            var ab=jQuery('[id$=defaultStatus]').text();
+            if(ab.includes("Default") || ab=='')
+                jQuery('[id$=accDefaultstatus]').text('Default');
+            else
+                jQuery('[id$=accDefaultstatus]').text('Active');
+            if("{!appWraper.size}"<1)
+                    jQuery('#alert1').show();
+            
+            var Amount=parseInt(jQuery('[id$=outstanding]').text());
+            jQuery('[id$=incAmount1]').text((Amount * 0.10).toFixed(2));
+            jQuery('[id$=incPayAmount1]').text((Amount * (1 - 0.10)).toFixed(2));
+            jQuery('[id$=incAmount2]').text((Amount * 0.15).toFixed(2));
+            jQuery('[id$=incPayAmount2]').text((Amount * (1 - 0.15)).toFixed(2));
+            jQuery('[id$=incAmount3]').text((Amount * 0.20).toFixed(2));
+            jQuery('[id$=incPayAmount3]').text((Amount * (1 - 0.20)).toFixed(2));
+            if(jQuery('[id$=pAddress]').text()==', , , , '){
+                jQuery('[id$=pAddress]').text('');
+                }
+           // alert('hey');
+            }
+            );
+            
+            function incentiveCalc(){
+                var Amount=parseFloat(jQuery('[id$=outstanding]').text());
+                var tval=parseFloat(jQuery('[id$=incentive4]').val());
+                if(!isNaN(tval)){
+                //alert(tval);
+                    jQuery('[id$=incAmount4]').text((Amount * (tval/100)).toFixed(2));
+                    jQuery('[id$=incPayAmount4]').text((Amount * (1 - (tval/100))).toFixed(2));
+                }
+                else{
+                    jQuery('[id$=incAmount4]').text('');
+                    jQuery('[id$=incPayAmount4]').text('');
+                }
+                //alert('Hi');
+            }
+            function actCancel(){
+                 jQuery('#gridAttempt1').slideUp(300);
+                 jQuery('#gridAttempt2').slideUp(300);
+                 //jQuery('#divattempt').show();
+                 //alert('lo');
+                 //$(".inlineEditWrite").children('span').css('display','inline');
+                 return false;
+            }
+            
+            function showGrids(){
+            jQuery('#errordiv8').hide();
+                jQuery('[id$=payfreq2]').prop("disabled", true);
+                jQuery('[id$=payfreq3]').prop("disabled", true);
+                 jQuery('[id$=effortTypeNego]').val("");
+                 jQuery('[id$=effortTypeRec]').val("Recovery Attempt");
+                 //jQuery('[id$=gridAttemptPanel]').css("display","inline");
+                 //jQuery('#gridAttempt1').show();
+                 //jQuery('#gridAttempt2').hide();
+                 jQuery('#gridAttempt1').slideDown(300);
+                 jQuery('#gridAttempt2').slideUp(300);
+                 clearFields();
+                 j$('.showCal').datepicker(   
+                {   defaultDate: "", 
+                    changeMonth: true,
+                    changeYear: true,
+                    numberOfMonths: 1,
+                    yearRange: '1900:2060',
+                    dateFormat:"mm/dd/yy",  
+                    altFormat: "mm/dd/yy", 
+                    showAnim: "slideDown" 
+                });
+                 //alert('lo');
+                 //$(".inlineEditWrite").children('span').css('display','inline');
+                 return false;
+            }
+            
+            function showGrids2(){
+                 jQuery('[id$=effortTypeRec]').val("");
+                 jQuery('[id$=effortTypeNego]').val("Negotiated Pay-Off Attempt");
+                 jQuery('[id$=payfreq2]').prop("disabled", true);
+                 jQuery('[id$=payfreq3]').prop("disabled", true);
+                 //jQuery('#gridAttempt2').show();
+                 //jQuery('#gridAttempt1').hide();
+                 jQuery('#gridAttempt2').slideDown(300);
+                 jQuery('#gridAttempt1').slideUp(300);
+                 clearFields();
+                 j$('.showCal').datepicker(   
+                {   defaultDate: "", 
+                    changeMonth: true,
+                    changeYear: true,
+                    numberOfMonths: 1,
+                    yearRange: '1900:2060',
+                    dateFormat:"mm/dd/yy",  
+                    altFormat: "mm/dd/yy", 
+                    showAnim: "slideDown" 
+                });
+                 //alert('lo');
+                 //$(".inlineEditWrite").children('span').css('display','inline');
+                 return false;
+            }
+            
+            function hideDiv(){
+               jQuery('[id$=gridAttemptPanel]').css("display", "none");
+               //alert('hi');
+               clearFields();
+               return false;
+            }
+            function compareDate(){
+                jQuery('#errordiv1').hide();
+                jQuery('#errordiv2').hide();
+                jQuery('#errordiv5').hide();
+                var w,x,y,z;
+                
+                if(jQuery('[id$=payfreq1]').val()=='Monthly' && jQuery('[id$=payfreq3]').val()==''){
+                    jQuery('#errordiv8').show();
+                    return;
+                }
+                
+                var currentDate = new Date();
+                w=jQuery('[id$=adjRemAm]').val();
+                z=jQuery('[id$=adjRemAm]').val();
+                if(jQuery('[id$=adjRemAmSdt]').val()!='' && jQuery('[id$=adjRemAmEdt]').val()!=''){
+                    x = new Date(jQuery('[id$=adjRemAmEdt]').val());
+                    y = new Date(jQuery('[id$=adjRemAmSdt]').val());
+                }
+                
+                if(x<y){
+                    jQuery('#errordiv1').show();
+                }
+                else if(x==undefined || y==undefined || w=='' || jQuery('[id$=fapp]').val()==''){
+                    jQuery('#errordiv2').show();
+                    }
+                else if(x<currentDate ){
+                    jQuery('#errordiv5').show();
+                }
+                else if(y<currentDate.setDate(currentDate.getDate() - 1) ){
+                    jQuery('#errordiv6').show();
+                }
+                else if(isNaN(w)){
+                   jQuery('#validate1').show();
+                }
+                else{
+                    savecall();
+                }
+                return false;
+            }
+            function compareDate1(){
+                jQuery('#errordiv3').hide();
+                jQuery('#errordiv4').hide();
+                //alert(jQuery('[id$=adjRemAm1]').val());
+                var w,x,y,z;
+                var currentDate = new Date();
+                w=jQuery('[id$=adjRemAm1]').val();
+                z=jQuery('[id$=adjRemAm1]').val();
+                //alert(jQuery('[id$=fapp1]').val());
+                if(jQuery('[id$=adjRemAmSdt1]').val()!='' && jQuery('[id$=adjRemAmEdt1]').val()!=''){
+                    x = new Date(jQuery('[id$=adjRemAmEdt1]').val());
+                    y = new Date(jQuery('[id$=adjRemAmSdt1]').val());
+                }
+                
+                if(x<y){
+                    jQuery('#errordiv3').show();
+                    
+                }
+                else if(x==undefined || y==undefined || w=='' || jQuery('[id$=fapp1]').val()==''){
+                    jQuery('#errordiv4').show();
+                }
+                else if(y<currentDate.setDate(currentDate.getDate() - 1) ){
+                    jQuery('#errordiv7').show();
+                }
+                else if(isNaN(w)){
+                   jQuery('#validate2').show();
+                }
+                else{
+                    savecall();
+                }
+                return false;
+            }
+            function clearFields(){
+                jQuery('[id$=notes1]').val("");
+                jQuery('[id$=adjRemAmSdt1]').val("");
+                jQuery('[id$=adjMpe]').prop("checked", false);
+                jQuery('[id$=adjRemAm1]').val("");
+                jQuery('[id$=adjRemAmEdt1]').val("");
+                jQuery('[id$=payfreq1]').val("");
+                jQuery('[id$=fapp1]').val("");
+                jQuery('[id$=notes]').val("");
+                jQuery('[id$=adjRemAmEdt]').val("");
+                jQuery('[id$=adjRemAmSdt]').val("");
+                jQuery('[id$=filingDate]').val("");
+                jQuery('[id$=adjRemAm]').val("");
+                jQuery('[id$=payfreq2]').val("");
+                jQuery('[id$=fapp]').val("");
+            }
+            function showOption() {
+                //alert('hi');
+                jQuery('[id$=payfreq1]').val("");
+                jQuery('#overlay').css("display", "block");
+                jQuery('[id$=payfreq2]').prop("disabled", true);
+                //alert('hello');
+            }
+            function frequencyChange(valu){
+                var a=valu;
+                jQuery('[id$=freq]').val(valu);
+                //alert(a);
+                if(a =='Monthly'){
+                    jQuery('[id$=payfreq3]').prop("disabled", false);
+                    jQuery('[id$=payfreq2]').prop("disabled", true);
+                }
+                else if(a == 'Weekly'){
+                    jQuery('[id$=payfreq3]').prop("disabled", true);
+                    jQuery('[id$=payfreq2]').prop("disabled", false);
+                }
+                else{
+                    jQuery('[id$=payfreq3]').prop("disabled", true);
+                    jQuery('[id$=payfreq2]').prop("disabled", true);
+                }
+                
+            }
+            function cancel(valu) {
+                if(valu=='Cancel')
+                    jQuery('[id$=freq]').val('');
+                jQuery('#overlay').css("display", "none");
+            }
+            function showWheel(){
+                j$('.modal').show();
+            }
+            function hideWheel(){
+                j$('.modal').hide();
+            }
+            function setFocusOnLoad() {}
+            
+    </script>
+    <apex:form id="salesforceAMIP">
+    <apex:pageMessages ></apex:pageMessages>
+        <apex:actionFunction name="savecall" action="{!save}" reRender="pageBlock3" status="wheelStatus" >
+        </apex:actionFunction>
+        <apex:actionStatus onstart="showWheel();" onstop="hideWheel()" id="wheelStatus"/>
+        <apex:sectionHeader title="{!Acc.Name}" />
+        <div align="center" style="margin: 2px 2px 4px 2px;" >
+        <!--<apex:commandButton action="/_ui/core/email/author/EmailAuthor?p3_lkid={!Acc.Id}&retURL=/apex/amc?id={!Acc.Id}" value="Send an Email" style="align-self: center;"/>-->
+        <apex:outputLink value="/_ui/core/email/author/EmailAuthor?p3_lkid={!Acc.Id}&retURL=/apex/amc?id={!Acc.Id}" target="_blank" styleClass="btn" style="text-decoration-line: none;align-self: center;">Send an Email</apex:outputLink>
+        <apex:outputLink value="/apex/PayoffLetter?accid={!Acc.id}" target="_blank" styleClass="btn" style="text-decoration-line: none;align-self: center;">Payoff Letter</apex:outputLink>
+        </div>
+        <div class = "modal" style = "display:none;">  
+                            <p style="position: fixed; padding-top: 15%;font-weight: bold;color: black;padding-left: 46%;font-size: 19px;" id="msgBlock"></p>
+                            </div>
+        <apex:pageblock id="pageBlock1" title="Merchant Information">
+        
+        <apex:outputPanel styleClass="changecolor">
+            
+        <apex:pageBlockSection collapsible="true" Title="Account" >
+                <apex:pageBlockSectionItem >
+                <apex:outputLabel value="Account Name" />
+                <apex:outputText value="{!acc.Name}"/>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                <apex:outputLabel value="Time Zone" />
+                <apex:outputText value="{!acc.Time_Zone_Name__c}"/>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                <apex:outputLabel value="Legal Corporate Name" />
+                <apex:outputText value="{!acc.Legal_Corporate_Name__c}"/>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                <apex:outputLabel value="State Of Incorporation" />
+                <apex:outputText value="{!acc.State_of_Incorporation__c}"/>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                <apex:outputLabel value="Physical Address" />
+                <apex:outputText id="pAddress" value="{!acc.ShippingStreet}, {!acc.ShippingCity}, {!acc.ShippingState}, {!acc.ShippingCountry}, {!acc.ShippingPostalCode}"/>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                <apex:outputLabel value="Business Start Date" />
+                <!--<apex:outputText value="{!Acc.Business_Start_Date__c}"/>-->
+                <apex:outputText value="{0,date,MM/dd/yyyy}" id="one">
+                    <apex:param value="{!acc.Business_Start_Date__c}" /> 
+                </apex:outputText>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                <apex:outputLabel value="Total Purchased Amount " />
+                <apex:outputText value="{!totalPurchased}"/>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                <apex:outputLabel value="Default Status" />
+                <apex:outputText id="accDefaultstatus"/>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                <apex:outputLabel value="Total Collected to Date" />
+                <apex:outputText value="{!totalCollectedDate}"/>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                <apex:outputLabel value="Perfomance Ratio" />
+                <apex:outputText value="{!pRatio}"/>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                <apex:outputLabel value="Total Outstanding Amount" />
+                <apex:outputText value="{!totalOutstand}" id="outstanding"/>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                <apex:outputLabel value="Total Recoverable Amount " />
+                <apex:outputText value="{!totalRecoveravble}"/>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                <apex:outputLabel value="Days Since Last Payment" />
+                <apex:outputText value="{!sinceLastPayment}"/>
+                </apex:pageBlockSectionItem>
+                <apex:pageBlockSectionItem >
+                <apex:outputLabel value="Final Judgement Amount" />
+                <apex:outputText value="{!acc.Final_Judgment_Amount__c}"/>
+                </apex:pageBlockSectionItem>
+                </apex:pageBlockSection>
+                <!--<apex:relatedList list="Owners__r" subject="{!Acc}"/>-->
+                <!--<apex:commandButton action="/a00/e?CF00NU0000004FQQZ={!Acc.Name}&retURL=/apex/amc?id={!Acc.Id}" value="New Owner"/>-->
+                <!--<apex:commandLink action="{!URLFOR($Action.Owners__c)}" value="Create New Fiscal Year"/>-->
+            <apex:pageBlockSection collapsible="true" Title="Owner" columns="1">
+                <apex:outputPanel >
+                <!--<div class="row" align="center" >
+                    <apex:commandButton action="/a00/e?CF00NU0000004FQQZ={!Acc.Name}&retURL=/apex/amc?id={!Acc.Id}" value="New Owner" style="align-self: center;"/>
+                </div>-->
+                <apex:pageBlockTable value="{!acc.Owners__r}" var="owner" width="100%">
+                <apex:column value="{!owner.First_Name__c}"><apex:facet name="header">First Name</apex:facet></apex:column>
+                <apex:column value="{!owner.Last_Name__c}"><apex:facet name="header">Last Name</apex:facet></apex:column>
+                <apex:column value="{!owner.Ownership__c}"><apex:facet name="header">Ownership %</apex:facet></apex:column>
+                <apex:column value="{!owner.Primary_Owner__c}"><apex:facet name="header">Primary Owner?</apex:facet></apex:column>
+                </apex:pageBlockTable>
+                </apex:outputPanel>
+            </apex:pageBlockSection>
+            <apex:pageBlockSection collapsible="true" Title="Contact Info" columns="1">
+                <apex:outputPanel >
+                <apex:pageBlockTable value="{!acc}" var="con" width="100%">
+               <!-- <apex:column value="{!con.Primary_Contact__r.Name}"><apex:facet name="header">Name</apex:facet></apex:column>-->
+                <apex:column >
+                     <apex:facet name="header">Name</apex:facet>
+                     <!--<apex:commandLink action="/apex/ContactInformation?accountId={!Acc.id}&contactId={!con.Primary_Contact__c}" target="_blank" value="{!con.Primary_Contact__r.Name}" style="text-decoration-line: underline;color:blue;"/>-->
+                     <apex:outputLink value="/{!con.Primary_Contact__c}" target="_blank" style="text-decoration-line: underline;">{!con.Primary_Contact__r.Name}</apex:outputLink>
+                </apex:column>
+                <apex:column >
+                    <apex:facet name="header">Phone</apex:facet>
+                    <support:clickToDial number="{!con.Primary_Contact__r.Phone}" entityId="{!con.Primary_Contact__c}" id="dial"/>
+                </apex:column>
+                <apex:column >
+                     <apex:facet name="header">Contact Info</apex:facet>
+                     <apex:outputLink value="/apex/ContactInformation?contactId={!con.Primary_Contact__c}" target="_blank" style="text-decoration-line: underline;" rendered="{!con.Primary_Contact__c!=null}">Go To Contact Info</apex:outputLink>
+                     <!--<apex:commandLink action="/apex/ContactInformation?accountId={!Acc.id}&contactId={!con.Primary_Contact__c}" target="_blank" value="Go To Contact Info" style="text-decoration-line: underline;color:blue;"/>-->
+                </apex:column>
+                <apex:column value="{!con.Primary_Contact__r.Email}" style="text-decoration-line: underline;"><apex:facet name="header">Email</apex:facet></apex:column>
+                </apex:pageBlockTable>
+                </apex:outputPanel>
+            </apex:pageBlockSection>
+            <apex:pageBlockSection collapsible="true" Title="Incentive Calculator" columns="1">
+                <apex:panelGrid columns="5" id="theGrid" width="100%" columnClasses="colstyle1" style="height:150px;" cellpadding="2">
+                    <apex:outputLabel value="Delay" style="font-weight:bold" />
+                    <apex:outputLabel value="Payoff Paid by Date" style="font-weight:bold"/>
+                    <apex:outputLabel value="Incentive % (Discount)" style="font-weight:bold"/>
+                    <apex:outputLabel value="Incentive $ Amount" style="font-weight:bold"/>
+                    <apex:outputLabel value="Incentive Payoff Amount" style="font-weight:bold"/>
+                    <apex:outputText value="30 days" />
+                    <apex:outputText value="{0,date,MM/dd/yyyy}" id="payoff1">
+                    <apex:param value="{!delayThirty}" /> 
+                    </apex:outputText> 
+                    <apex:outputText value="10%" id="incentive1" />
+                    <apex:outputText id="incAmount1" />
+                    <apex:outputText id="incPayAmount1" />
+                    
+                    <apex:outputText value="2 weeks"/>
+                    <apex:outputText value="{0,date,MM/dd/yyyy}" id="payoff2">
+                    <apex:param value="{!delaytwo}" /> 
+                    </apex:outputText>
+                    <apex:outputText value="15%" id="incentive2" />
+                    <apex:outputText value="" id="incAmount2" />
+                    <apex:outputText value="" id="incPayAmount2" />
+                    
+                    <apex:outputText value="Same week"/>
+                    <apex:outputText value="{0,date,MM/dd/yyyy}" id="payoff3">
+                    <apex:param value="{!delaySame}" /> 
+                    </apex:outputText>
+                    <apex:outputText value="20%" id="incentive3" />
+                    <apex:outputText value="" id="incAmount3" />
+                    <apex:outputText value="" id="incPayAmount3" />
+                    
+                    <apex:outputText value="Other"/>
+                    <apex:inputText id="payoff4"/>
+                    <!--<apex:outputPanel >
+                    <input value="{!payoff}" type="text" id="payoff4" />
+                    </apex:outputPanel>-->
+                    <apex:inputText id="incentive4" onkeyup="incentiveCalc()"/> 
+                    <!--<input value="{!incentive}" type="text" id="incentive4" onkeyup="incentiveCalc()"/>-->
+                    <apex:outputText value="" id="incAmount4" />
+                    <apex:outputText value="" id="incPayAmount4" />
+                </apex:panelGrid>
+            </apex:pageBlockSection>
+            </apex:outputPanel>
+        </apex:pageblock>
+    <apex:outputPanel styleClass="changecolor" >
+    <apex:pageblock id="pageBlock2" title="Application List" mode="detail" >
+    <div id="alert1" style='font-weight:bold;color:red;display:none;'>No Applications Found</div>
+    <apex:repeat value="{!appWraper}" var="ap" id="theRepeat">
+        <apex:pageBlockSection Title="{!ap.opp.Application_Number__c} - {!ap.opp.Name} " id="appl" >
+            <apex:facet name="header">
+            <apex:outputLink value="/{!ap.opp}" target="_blank" style="text-decoration-line: underline;color:white;">{!ap.opp.Application_Number__c} - {!ap.opp.Name}</apex:outputlink>
+            </apex:facet>
+            <apex:pageBlockSectionItem >
+            <apex:outputLabel value="Close Date " />
+            <apex:outputText value="{0,date,MM/dd/yyyy}" id="one">
+                    <apex:param value="{!ap.opp.CloseDate}" /> 
+            </apex:outputText>
+            <!--<apex:outputText value="{!ap.opp.CloseDate}" id="one"/>-->
+            </apex:pageBlockSectionItem>
+            <apex:pageBlockSectionItem >
+            <apex:outputLabel value="Stage" />
+            <apex:outputText value="{!ap.opp.StageName}"/>
+            </apex:pageBlockSectionItem>
+            <apex:pageBlockSectionItem >
+            <apex:outputLabel value="Last Payment Cleared Date" />
+            <apex:outputText value="{0,date,MM/dd/yyyy}" >
+                    <apex:param value="{!ap.opp.Last_Payment_Date__c}" /> 
+            </apex:outputText>
+            <!--<apex:outputText value="{!ap.opp.Last_Payment_Date__c}"/>-->
+            </apex:pageBlockSectionItem>
+            <apex:pageBlockSectionItem >
+            <apex:outputLabel value="Total # of Rejected Payments" />
+            <apex:outputText value="{!ap.opp.Total_ve_Remittances__c}"/>
+            </apex:pageBlockSectionItem>
+            <apex:pageBlockSectionItem >
+            <apex:outputLabel value="Funded Amount" />
+            <apex:outputText value="{!ap.opp.Amount}"/>
+            </apex:pageBlockSectionItem>
+            <apex:pageBlockSectionItem >
+            <apex:outputLabel value="Total Purchased Amount" />
+            <apex:outputText value="{!ap.opp.Total_Payback_Amount__c}"/>
+            </apex:pageBlockSectionItem>
+            <apex:pageBlockSectionItem >
+            <apex:outputLabel value="Days Since last Payment" />
+            <apex:outputText value="{!ap.opp.Days_since_last_payment__c}"/>
+            </apex:pageBlockSectionItem>
+            <apex:pageBlockSectionItem >
+            <apex:outputLabel value="Total # of Payment Days on Hold" />
+            <apex:outputText value="{!ap.payHoldDays}"/>
+            </apex:pageBlockSectionItem>
+            <apex:pageBlockSectionItem >
+            <apex:outputLabel value="Default Status" />
+            <apex:outputText value="{!if((ap.opp.stageName=='Paid-Off') || (ap.defaultNoDays!=null && ap.defaultNoDays < 30)  ,"Active","Default")}" id="defaultStatus" />
+            </apex:pageBlockSectionItem>
+            <apex:pageBlockSectionItem >
+            <apex:outputLabel value="Total Collected to Date" />
+            <apex:outputText value="{!ap.opp.Total_Collected_to_Date__c}"/>
+            </apex:pageBlockSectionItem>
+            <apex:pageBlockSectionItem >
+            <apex:outputLabel value="Total Recoverable Amount" />
+            <apex:outputText value="{!ap.totalRecAmount}"/>
+            </apex:pageBlockSectionItem>
+            <apex:pageBlockSectionItem >
+            <apex:outputLabel value="Knight Funding Subsidiary" />
+            <apex:outputText value="{!ap.opp.Knight_Funding_Subsidiary__r.Name}"/>
+            </apex:pageBlockSectionItem>
+            <apex:pageBlockSectionItem >
+            <apex:outputLabel value="Outstanding Amount" />
+            <apex:outputText value="{!ap.opp.Total_Payback_Amount__c - ap.opp.Total_Collected_to_Date__c}"/>
+            </apex:pageBlockSectionItem>
+            <apex:pageBlockSectionItem >
+            <apex:outputLabel value="Perfomance Ratio" />
+            <apex:outputText value="{!ap.ratio }"/>
+            </apex:pageBlockSectionItem>
+            <apex:pageBlockSectionItem >
+            <apex:outputLabel value="SPV Subsidiary" />
+            <apex:outputText value="{!ap.opp.SPV_Subsidiary__r.Name}"/>
+            </apex:pageBlockSectionItem>
+            <apex:pageBlockSectionItem >
+            <apex:outputLabel value="Projected No. Of Payments Remaining" />
+            <apex:outputText value="{!ap.opp.Projected_No_of_Payments_Remaining__c}"/>
+            </apex:pageBlockSectionItem>
+       </apex:pageBlockSection>
+    </apex:repeat>
+    </apex:pageblock>
+    </apex:outputPanel>
+    <apex:pageblock id="pageBlock3" title="Attempt Efforts" rendered="{!if(appWraper.size>0,true,false)}">
+    <apex:outputPanel styleClass="changecolor">
+    <!--<apex:commandButton value=" Rerender" reRender="pageBlock3" Style="width:80px;" />-->
+    <apex:pageMessages ></apex:pageMessages>
+        <apex:pageBlockSection Title="Recovery Attempt" id="atmpEffort" columns="1" collapsible="false"/>
+            <div class="row" align="left" style="margin: 2px 2px 2px 2px;">
+            <apex:commandLink value="Add Recovery Attempt"  onclick="showGrids();return false;" style="text-decoration-line: underline;color:blue;" />
+            </div>
+            
+            <apex:outputPanel id="gridAttemptPanel" layout="block">
+            <div style="display:none;border-style:inset;margin: 2px 2px 4px 2px;padding: 2px 2px 2px 2px;" id="gridAttempt1">
+            <apex:panelGrid columns="9" id="theGridAttempt" width="100%" columnClasses="colstyle2" cellpadding="2" >
+                <apex:outputLabel value="App #" style="font-weight:bold;font-size: 11px;"/>
+                <apex:outputLabel value="Payment Frequency" style="font-weight:bold;font-size: 11px;"/>
+                <apex:outputLabel value="Weekly Frequency" style="font-weight:bold;font-size: 11px;"/>
+                <apex:outputLabel value="Monthly Frequency" style="font-weight:bold;font-size: 11px;"/>
+                <apex:outputLabel value="Manual Payment Expected" style="font-weight:bold;font-size: 11px;"/>
+                <apex:outputLabel value="Adjusted Remittance Amount" style="font-weight:bold;font-size: 11px;"/>
+                <apex:outputLabel value="Start Date" style="font-weight:bold;font-size: 11px;"/>
+                <apex:outputLabel value="End Date" style="font-weight:bold;font-size: 11px;"/>
+                <apex:outputLabel value="Notes" style="font-weight:bold;font-size: 11px;"/>
+                <apex:selectList value="{!sAmip1.Application__c}" multiselect="false" size="1" id="fapp" styleClass="fixSize" style="height:24px;width:120px;">
+                    <apex:selectOptions value="{!Applications}"></apex:selectOptions>
+                </apex:selectList>
+                <apex:selectList value="{!sAmip1.Payment_Frequency__c}" multiselect="false" size="1" id="payfreq1" styleClass="fixSize" style="height:24px;width:120px;" onchange="frequencyChange(this.value);">
+                      <apex:selectOptions value="{!PaymentFreq}"></apex:selectOptions>
+                </apex:selectList>
+                <apex:selectList value="{!sAmip1.Weekly_Frequency__c}" multiselect="false" size="1"  id="payfreq2" styleClass="fixSize" style="height:24px;width:120px;" >
+                     <apex:selectOptions value="{!WeeklyFreq}"></apex:selectOptions>
+                </apex:selectList>
+                <apex:selectList value="{!sAmip1.Monthly_Frequency_Type__c}" multiselect="false" size="1"  id="payfreq3" styleClass="fixSize" style="height:24px;width:120px;" >
+                     <apex:selectOptions value="{!MonthlyFreq}"></apex:selectOptions>
+                </apex:selectList>
+                <apex:inputCheckbox value="{!sAmip1.Manual_Payment_Expected__c}" id="adjMpe"/>
+                <apex:inputText value="{!sAmip1.Adjusted_Remittance_Amount__c}"  id="adjRemAm" style="height:18px;width:120px;"/>
+                <apex:inputText value="{!sAmip1.Adjusted_Remittance_Amount_Start_Date__c}"  id="adjRemAmSdt" StyleClass="showCal" style="height:18px;width:120px;" />
+                <apex:inputText value="{!sAmip1.Adjusted_Remittance_Amount_End_Date__c}"  id="adjRemAmEdt" StyleClass="showCal" style="height:18px;width:120px;"/>
+                <apex:inputText value="{!sAmip1.Notes__c}" id="notes" style="height:18px;width:120px;"/>
+                
+            </apex:panelGrid>
+            <apex:inputHidden value="{!sAmip1.Attempt_Effort_Type__c}" id="effortTypeRec"/>
+            <apex:commandButton value=" Save " Style="width:80px" id="save1" onClick="compareDate();return false;" reRender="pageBlock3"/>
+            <apex:commandButton value=" Cancel" onClick="actCancel();return false;" reRender="gridAttemptPanel" Style="width:80px;" />
+            <div class='validation' id="errordiv1" style='font-weight:bold;color:red;display:none;'>Start Date cannot be greater than End Date</div>
+            <div class='validation' id="errordiv2" style='font-weight:bold;color:red;display:none;'>Please fill in App#, Payment Frequency, Adjusted Remittance Amount, Adjusted Remittance Start Date, Adjusted Remittance End Date.</div>
+            <div class='validation' id="errordiv5" style='font-weight:bold;color:red;display:none;'>Please enter 'Adjusted Remittance End Date' greater than today</div>
+            <div class='validation' id="validate1" style='font-weight:bold;color:red;display:none;'>Please enter number in Adjusted Remittance Amount field</div>
+            <div class='validation' id="errordiv6" style='font-weight:bold;color:red;display:none;'>Start date cannot be less than today</div>
+            <div class='validation' id="errordiv8" style='font-weight:bold;color:red;display:none;'>Please Enter Monthly Frequency</div>
+            </div>
+            </apex:outputPanel>
+            <!--<apex:outputPanel layout="block">
+            <div style="overflow:scroll;width:100%;height:auto">
+            <apex:pageBlock mode="maindetail">-->
+            
+            <apex:pageBlockTable value="{!sAmipRec}" var="amp"  columns="11" rowClasses="odd,even" id="table1" rendered="{!sAmipRec.size > 0}">
+                <apex:column value="{!amp.OwnerId}"><apex:facet name="header">Agent</apex:facet></apex:column>
+                <apex:column ><apex:facet name="header">Created Date</apex:facet>
+                <apex:outputText value="{0,date,MM/dd/yyyy}" id="one">
+                    <apex:param value="{!amp.CreatedDate}" /> 
+                </apex:outputText>
+                </apex:column>
+                <apex:column value="{!amp.Application_Number__c}"><apex:facet name="header">App #</apex:facet></apex:column>
+                <apex:column value="{!amp.Payment_Frequency__c}"><apex:facet name="header">Payment Frequency</apex:facet></apex:column>
+                <apex:column value="{!amp.Adjusted_Remittance_Amount__c}"><apex:facet name="header">Adjusted Remittance Amount</apex:facet></apex:column>
+                <apex:column value="{!amp.Adjusted_Remittance_Amount_Start_Date__c}"><apex:facet name="header">Adjusted Remittance Start Date</apex:facet></apex:column>
+                <apex:column value="{!amp.Adjusted_Remittance_Amount_End_Date__c}"><apex:facet name="header">Adjusted Remittance End Date</apex:facet></apex:column>
+                <apex:column value="{!amp.Attempt_Status__c}"><apex:facet name="header">Attempt Status </apex:facet></apex:column>
+                <apex:column value="{!amp.Actual_received_amount__c}"><apex:facet name="header">Total Amount Recovered</apex:facet></apex:column>
+                <apex:column value="{!amp.Notes__c}"><apex:facet name="header">Notes</apex:facet></apex:column>
+                <apex:column >
+                    <apex:facet name="header">Remittance Link</apex:facet>
+                    <apex:outputLink value="/{!amp.id}" target="_blank" style="text-decoration-line: underline;">{!amp.Name}</apex:outputLink>
+                </apex:column>
+            </apex:pageBlockTable>
+            <div id="alert2" style='font-weight:bold;color:red;display:{!if(sAmipRec.size < 1,"block","none")};'>No Recovery Attempts Found</div>
+            <!--</apex:pageBlock>
+            </div>
+            </apex:outputPanel>-->
+        
+        <apex:pageBlockSection Title="Negotiated Pay-Off Attempt" id="atmpEffort1" columns="1" collapsible="false"/>
+            <div class="row" align="left" style="margin: 2px 2px 2px 2px;">
+            <apex:commandLink value="Add Negotiated Pay-Off Attempt"  reRender="" onclick="showGrids2();return false;" style="text-decoration-line: underline;color:blue;"/>
+            </div>
+            
+            <apex:outputPanel id="gridAttemptPanel1" layout="block">
+            <div style="display:none;border-style:inset;margin: 2px 2px 4px 2px;padding: 2px 2px 2px 2px;" id="gridAttempt2">
+            <apex:panelGrid columns="5" id="theGridAttempt1" width="100%" columnClasses="colstyle2" cellpadding="2" style="margin: 2px 2px 2px 2px;">
+                <apex:outputLabel value="App #" style="font-size: 11px;font-weight:bold;" for="fapp1"/>
+                <apex:outputLabel value="Negotiated Pay-Off Amount"  style="font-size: 11px;font-weight:bold;" for="adjRemAm1"/>
+                <apex:outputLabel value="Negotiated Pay-Off Start Date" style="font-size: 11px;font-weight:bold;" for="adjRemAmSdt1"/>
+                <apex:outputLabel value="Negotiated Pay-Off End Date" style="font-size: 11px;font-weight:bold;" for="adjRemAmEdt1"/>
+                <apex:outputLabel value="Notes" style="font-size: 11px;font-weight:bold;" for="notes1"/>
+                <apex:selectList value="{!sAmip2.Application__c}" multiselect="false" size="1" id="fapp1" styleClass="fixSize" style="height:24px">
+                    <apex:selectOptions value="{!Applications}"></apex:selectOptions>
+                </apex:selectList>
+                <apex:inputText value="{!sAmip2.Negotiated_Pay_Off_Amount__c}"  id="adjRemAm1" style="height:18px"/>
+                <apex:inputText value="{!sAmip2.Negotiated_Pay_Off_Amount_Start_Date__c}"  id="adjRemAmSdt1" StyleClass="showCal" style="height:18px"/>
+                <apex:inputText value="{!sAmip2.Negotiated_Pay_Off_Amount_End_Date__c}"  id="adjRemAmEdt1" StyleClass="showCal" style="height:18px" />
+                <apex:inputText value="{!sAmip2.Notes__c}" id="notes1" style="height:18px"/>
+                
+            </apex:panelGrid>
+            <apex:inputHidden value="{!sAmip2.Attempt_Effort_Type__c}" id="effortTypeNego"/>
+            <apex:commandButton value=" Save "  onClick="compareDate1();return false;" Style="width:80px" reRender="pageBlock3"/>
+            <apex:commandButton value=" Cancel" onClick="actCancel();return false;" reRender="gridAttemptPanel1" Style="width:80px"/>
+            <div class='validation' id="errordiv3" style='font-weight:bold;color:red;display:none;'>Start Date cannot be greater than End Date</div>
+            <div class='validation' id="errordiv4" style='font-weight:bold;color:red;display:none;'>Please fill in App#, Negotiated Pay-Off Amount, Negotiated Pay-Off Start Date and Negotiated Pay-Off End Date.</div>
+            <div class='validation' id="validate2" style='font-weight:bold;color:red;display:none;'>Please enter number in Negotiated Pay-Off Amount field</div>
+            <div class='validation' id="errordiv7" style='font-weight:bold;color:red;display:none;'>Start date cannot be less than today</div>
+            </div>
+            </apex:outputPanel>
+            <!--<apex:outputPanel layout="block">
+            <div style="overflow:scroll;width:100%;height:auto">
+            <apex:pageBlock mode="maindetail">-->
+            <apex:pageBlockTable value="{!sAmipNego}" var="amp"  columns="11" rowClasses="odd,even" rendered="{!sAmipNego.size > 0}">
+                <apex:column value="{!amp.OwnerId}"><apex:facet name="header">Agent</apex:facet></apex:column>
+                <apex:column ><apex:facet name="header">Created Date</apex:facet>
+                <apex:outputText value="{0,date,MM/dd/yyyy}" id="one">
+                    <apex:param value="{!amp.CreatedDate}" /> 
+                </apex:outputText>
+                </apex:column>
+                <apex:column value="{!amp.Application_Number__c}"><apex:facet name="header">App #</apex:facet></apex:column>
+                <apex:column value="{!amp.Negotiated_Pay_Off_Amount__c}"><apex:facet name="header">Negotiated Pay-Off Amount </apex:facet></apex:column>
+                <apex:column value="{!amp.Negotiated_Pay_Off_Amount_Start_Date__c}"><apex:facet name="header">Negotiated Pay-Off Start Date</apex:facet></apex:column>
+                <apex:column value="{!amp.Negotiated_Pay_Off_Amount_End_Date__c}"><apex:facet name="header">Negotiated Pay-Off End Date</apex:facet></apex:column>
+                <apex:column value="{!amp.Negotiated_Pay_Off_Attempt_Status__c}"><apex:facet name="header">Attempt Status </apex:facet></apex:column>
+                <apex:column value="{!amp.Actual_received_amount__c}"><apex:facet name="header">Total Amount Recovered</apex:facet></apex:column>
+                <apex:column value="{!amp.Notes__c}"><apex:facet name="header">Notes</apex:facet></apex:column>
+                <apex:column >
+                    <apex:facet name="header">Remittance Link</apex:facet>
+                    <apex:outputLink value="/{!amp.id}" target="_blank" style="text-decoration-line: underline;">{!amp.Name}</apex:outputLink>
+                </apex:column>
+            </apex:pageBlockTable>
+            <div id="alert3" style="font-weight:bold;color:red;display:{!if(sAmipNego.size < 1,"block","none")};">No Negotiated Pay-Off Attempts Found</div>
+            <!--<div id="overlay">
+            <div id="text" class="row">
+                  <div class="col-sm-12" align="center">
+                    <apex:panelGrid columnClasses="col1, col2"  columns="2" id="theGridb" >
+                        <apex:outputLabel value="Payment Frequency" style="font-weight:bold;font-size: 11px;"/>
+                        <apex:selectList value="{!sAmip1.Payment_Frequency__c}" multiselect="false" size="1" id="payfreq1" styleClass="fixSize" style="height:24px" onchange="frequencyChange(this.value);">
+                            <apex:selectOptions value="{!PaymentFreq}"></apex:selectOptions>
+                        </apex:selectList>
+                        <apex:outputLabel value="Monthly Frequency" style="font-weight:bold;font-size: 11px;"/>
+                        <apex:selectList value="{!sAmip1.Monthly_Frequency_Type__c}" multiselect="false" size="1"  id="payfreq2" styleClass="fixSize" style="height:24px" >
+                            <apex:selectOptions value="{!MonthlyFreq}"></apex:selectOptions>
+                        </apex:selectList>
+                    </apex:panelGrid>
+                    <input type="Button" value="Ok" onclick="cancel(this.value);" style="margin-bottom: 3px"/>
+                    <input type="Button" value="Cancel" onclick="cancel(this.value);" style="margin-bottom: 3px"/>
+                </div>
+                  
+              </div>
+            </div>-->
+        </apex:outputPanel>
+    </apex:pageblock>
+    </apex:form>
+</apex:page>
+
+
+
+=================================================================================================================
+public class SalesforceAMIP {
+    public Account acc{ get; set; }
+    public Decimal totalPurchased { get; set; }
+    public Decimal totalCollectedDate { get; set; }
+    public Decimal totalOutstand{ get; set; }
+    public Decimal totalRecoveravble{ get; set; }
+    public Decimal sinceLastPayment{ get; set; }
+    public String defStatus{ get; set; }
+    public decimal pRatio{ get; set; }
+    public Date delayThirty{ get; set; }
+    public Date delaytwo{ get; set; }
+    public Date delaySame{ get; set; }
+    public Salesforce_AMIP__c sAmip1{ get; set;}
+    public Salesforce_AMIP__c sAmip2{ get; set;}
+    public List<Salesforce_AMIP__c> sAmipNego{ get; set;}
+    public List<Salesforce_AMIP__c> sAmipRec{ get; set;}
+    public Map<string,Opportunity> oppMap;
+    public List<Remittance__c> rem;
+    public List<Salesforce_AMIP__c> mainListAmip;
+    public List<ApplicationWrapper> appWraper {get;set;}
+    
+    public SalesforceAMIP(){
+        totalPurchased = 0;
+        totalCollectedDate= 0;
+        totalOutstand=0;
+        totalRecoveravble=0;
+        sinceLastPayment=999999;
+        defStatus='Default';
+        oppMap=new Map<string,Opportunity>();
+        sAmipRec=new List<Salesforce_AMIP__c>();
+        sAmipNego=new List<Salesforce_AMIP__c>();
+        sAmip1=new Salesforce_AMIP__c();
+        sAmip2=new Salesforce_AMIP__c();
+        mainListAmip=new List<Salesforce_AMIP__c>();
+        acc=getAccount(ApexPages.currentPage().getParameters().get('id'));
+        if(acc.Primary_Contact__c!=null)
+                getContacinfo(acc.Primary_Contact__c);
+        for(Opportunity op:acc.Opportunities)
+           oppMap.put(op.id,op);
+        calculateValues();
+        mainListAmip=getAmip(oppMap.keySet());
+        for(Salesforce_AMIP__c amip:mainListAmip){
+            if(amip.Attempt_Effort_Type__c=='Recovery Attempt')
+                sAmipRec.add(amip);
+            else if(amip.Attempt_Effort_Type__c=='Negotiated Pay-Off Attempt')
+                sAmipNego.add(amip);
+        }
+        if(totalRecoveravble!=0 && totalRecoveravble!=Null)
+            pRatio=(totalCollectedDate/totalRecoveravble).setScale(2);
+        if(pRatio<0)
+            pRatio=0.00;
+        if(sinceLastPayment==999999)
+            sinceLastPayment=0;
+    }
+    public List<SelectOption> getAttemptTypes() {
+            List<SelectOption> options = new List<SelectOption>();
+            options.add(new SelectOption('','--Select--'));
+            options.add(new SelectOption('Recovery Attempt','Recovery Attempt')); 
+            options.add(new SelectOption('Negotiated Pay-Off Attempt','Negotiated Pay-Off Attempt'));
+        return options;
+    }
+    public List<SelectOption> getApplications() {
+            List<SelectOption> options = new List<SelectOption>();
+            options.add(new SelectOption('','-Select-'));
+            for(Opportunity o:acc.Opportunities)
+                options.add(new SelectOption(o.id,o.Application_Number__c));
+            if(options.size()==2)
+               options.remove(0); 
+        return options;
+    }
+    public List<SelectOption> getPaymentFreq() {
+            List<SelectOption> options = new List<SelectOption>();
+            options.add(new SelectOption('Daily','Daily')); 
+            options.add(new SelectOption('Weekly','Weekly'));
+                options.add(new SelectOption('Monthly','Monthly'));
+        return options;
+    }
+    public List<SelectOption> getMonthlyFreq() {
+            List<SelectOption> options = new List<SelectOption>();
+            options.add(new SelectOption('','--None--')); 
+            options.add(new SelectOption('1st of Month','1st of Month'));
+            options.add(new SelectOption('15th of Month','15th of Month'));
+        return options;
+    }
+    public List<SelectOption> getWeeklyFreq() {
+            List<SelectOption> options = new List<SelectOption>();
+            options.add(new SelectOption('','--None--')); 
+            options.add(new SelectOption('Monday','Monday'));
+            options.add(new SelectOption('Tuesday','Tuesday'));
+            options.add(new SelectOption('Wednesday','Wednesday'));
+            options.add(new SelectOption('Thursday','Thursday'));
+            options.add(new SelectOption('Friday','Friday'));
+        return options;
+    }
+    
+    public void save(){
+        try{
+            if(sAmip1.Attempt_Effort_Type__c=='Recovery Attempt'){
+                insertAndUpdateRecoveryAttempt();
+            }
+            else if(sAmip2.Attempt_Effort_Type__c=='Negotiated Pay-Off Attempt'){
+                insertAndUpdateNegotiatedAttempt();
+            }
+        }
+        catch(Exception ex){
+            ApexPages.addMessage(new ApexPages.Message(ApexPages.severity.WARNING,'Hello Exception occured..! some record created with bad data, please verify it.')); 
+        }
+    }
+    public void computeFormula(String opId,Boolean beforeCutOffTime){
+        Opportunity Appli=oppMap.get(opId);
+        Long sec1;
+        if(Appli.First_Payment_Received_Date__c!=null)
+                Long sec=BusinessHours.diff(System.Label.BusinessHoursId,Appli.First_Payment_Received_Date__c, System.today());
+        rem=new List<Remittance__c>();
+        System.debug(sAmip1.Computed_Payment_Start_Date__c+'chkdate'+sAmip1.Computed_Payment_End_Date__c);
+        System.debug(sAmip1);
+        if(sAmip1.Application__c!=Null || String.isNotBlank(sAmip1.Application__c)){
+            rem=[Select Payment_Amount__c,Salesforce_AMIP__c,Date__c,Original_Payment_Date__c,Payment_Status__c from Remittance__c where Application__c=:opId AND Date__c>=:sAmip1.Computed_Payment_Start_Date__c AND Date__c<=:sAmip1.Computed_Payment_End_Date__c order by Date__c desc];
+            sec1=BusinessHours.diff(System.Label.BusinessHoursId,sAmip1.Computed_Payment_Start_Date__c, sAmip1.Computed_Payment_End_Date__c);
+            computeAmount(rem,sec1,sAmip1,beforeCutOffTime);
+        }
+        else if(sAmip2.Application__c!=Null || String.isNotBlank(sAmip2.Application__c)){
+            rem=[Select Payment_Amount__c,Salesforce_AMIP__c,Date__c,Original_Payment_Date__c,Payment_Status__c from Remittance__c where Application__c=:opId AND Date__c>=:sAmip2.Computed_Payment_Start_Date__c AND Date__c<=:sAmip2.Computed_Payment_End_Date__c order by Date__c desc];
+            sec1=BusinessHours.diff(System.Label.BusinessHoursId,sAmip2.Computed_Payment_Start_Date__c, sAmip2.Computed_Payment_End_Date__c );
+            computeAmount(rem,sec1,sAmip2,beforeCutOffTime);
+        }
+    }
+    
+    public static void computeAmount(List<Remittance__c> rem,Long sec,Salesforce_AMIP__c sAmip,Boolean beforeCutOffTime){
+        integer count=0;
+        Integer Month;
+        Decimal amount=sAmip.Adjusted_Remittance_Amount__c;
+        //Decimal expectedAmount=0;
+        Decimal actualReceivedAmount=0; 
+        for(Remittance__c remitt:rem){
+            if(remitt.Payment_Status__c=='Cleared' || remitt.Payment_Status__c=='Manual Payment'){
+                actualReceivedAmount +=remitt.Payment_Amount__c;
+            }
+        }
+        sAmip.Actual_received_amount__c=actualReceivedAmount;
+        Integer days=Integer.valueOf(sec/(9*60*60*1000));
+        
+        if(sAmip.Payment_Frequency__c=='Daily'){
+                sAmip.Expected_Amount__c=amount*days;
+        }
+        else if(sAmip.Payment_Frequency__c=='Weekly' && beforeCutOffTime){
+                sAmip.Expected_Amount__c=amount*((days/5)+1);
+        }
+        else if(sAmip.Payment_Frequency__c=='Weekly' && !beforeCutOffTime){
+                sAmip.Expected_Amount__c=amount*((days/5));
+        }
+        else if(sAmip.Payment_Frequency__c=='Monthly' && sAmip.Monthly_Frequency_Type__c=='1st of Month'){
+                Month=getMonth(sAmip)+1; 
+                System.debug('MonthTest '+Month+' Amount '+amount);
+                sAmip.Expected_Amount__c=amount*Month;
+        }
+        else if(sAmip.Payment_Frequency__c=='Monthly' && sAmip.Monthly_Frequency_Type__c=='15th of Month'){
+                Month= getMonth(sAmip);
+                sAmip.Expected_Amount__c=amount*Month;
+        }
+        
+    }
+    Public Integer calPaymentHoldDays(String id){
+        System.debug('calPaymentHoldDays');
+        Integer count=0;
+        DateTime d1;
+        DateTime d2;
+        for(OpportunityFieldHistory oHistory:getHistory(oppMap.keySet())){
+            if(oHistory.OpportunityId==id && (oHistory.OldValue=='Payment Hold' || oHistory.NewValue=='Payment Hold')){//&& (oHistory.OldValue=='Funded' || oHistory.OldValue=='Payment Hold') && (oHistory.NewValue=='Funded' || oHistory.NewValue=='Payment Hold')
+                if(oHistory.NewValue=='Payment Hold')
+                    d1=oHistory.CreatedDate;
+                else if(oHistory.OldValue=='Payment Hold')
+                    d2=oHistory.CreatedDate;
+                if(d1!=null && d2!=null && d1.date()!=d2.date()){
+                    count+=Integer.valueOf(((BusinessHours.diff(System.Label.BusinessHoursId,d1,d2))/(9*60*60*1000)));
+                    d2=null;
+                    d1=null;
+                System.debug('d1#'+d1+'d2#'+d2);
+                }
+                System.debug('d1##'+d1+'d2##'+d2);
+            }
+        }
+        if(d1!=null && d2==null)
+            count+=Integer.valueOf(((BusinessHours.diff(System.Label.BusinessHoursId,d1,System.today()))/(9*60*60*1000)));
+        return count;
+    }
+    
+    private void insertAndUpdateRecoveryAttempt(){
+        Opportunity opUpdate=new Opportunity();
+        Boolean beforeCutOffTime=cutOffTime();
+        sAmip2.Application__c=Null; 
+        computeDate(beforeCutOffTime,sAmip1);
+        computeFormula(sAmip1.Application__c,beforeCutOffTime);
+        opUpdate=oppMap.get(sAmip1.Application__c);
+        Salesforce_AMIP__c amipNew= new Salesforce_AMIP__c();
+        amipNew=sAmip1;
+        if(rem.size()>0)
+          amipNew.Latest_Payment_Date__c=rem[0].Date__c;
+        amipNew.Account__c=opUpdate.Account.id;
+        if(amipNew.Payment_Frequency__c=='Monthly')
+            amipNew.Manual_Payment_Expected__c=true;
+        opUpdate.Manual_Payment_Expected__c=amipNew.Manual_Payment_Expected__c;
+        insert amipNew;
+        opUpdate.Temporary_Payment_Amt__c=sAmip1.Adjusted_Remittance_Amount__c;
+        opUpdate.Temporary_Payment_Start_Dt__c=sAmip1.Adjusted_Remittance_Amount_Start_Date__c;
+        opUpdate.Temporary_Payment_End_Dt__c=sAmip1.Adjusted_Remittance_Amount_End_Date__c;
+        amipNew=[Select Name,Adjusted_Remittance_Amount__c,Adjusted_Remittance_Amount_End_Date__c,Account__c,OwnerId,Adjusted_Remittance_Amount_Start_Date__c,
+                                Attempt_Status__c,Application_Number__c,Actual_received_amount__c,
+                                Attempt_Effort_Type__c, Notes__c,Application__c,Payment_Frequency__c,CreatedDate from Salesforce_AMIP__c where id=:amipNew.id];
+        //sAmipRec.add(amipNew); 
+        adjustRemittance(amipNew,true);
+        update opUpdate;
+        sAmipRec.add(amipNew); 
+        sAmip1.id=null;
+    }
+     private void insertAndUpdateNegotiatedAttempt(){
+        Opportunity opUpdate=new Opportunity();
+        sAmip1.Application__c=Null;
+        Boolean beforeCutOffTime=cutOffTime();
+        System.debug('compute#');
+        computeDate(beforeCutOffTime,sAmip2);
+        computeFormula(sAmip2.Application__c,beforeCutOffTime);
+        opUpdate=oppMap.get(sAmip2.Application__c);
+        sAmip2.Total_Collected_to_Date__c=opUpdate.Total_Collected_to_Date__c;
+        //sAmip2.Expected_PayOff_balance__c=opUpdate.Total_Collected_to_Date__c + sAmip2.Negotiated_Pay_Off_Amount__c;
+        Salesforce_AMIP__c amipNewNego= new Salesforce_AMIP__c();
+        amipNewNego=sAmip2;
+        System.debug('hi1#');
+        if(rem.size()>0)
+            amipNewNego.Latest_Payment_Date__c=rem[0].Date__c;
+        System.debug('hi2#');
+        amipNewNego.Account__c=opUpdate.Account.id;
+        if(amipNewNego.Payment_Frequency__c=='Monthly')
+            amipNewNego.Manual_Payment_Expected__c=true;
+        opUpdate.Manual_Payment_Expected__c=amipNewNego.Manual_Payment_Expected__c;
+        insert amipNewNego;
+        
+        opUpdate.Negotiated_Pay_Off_Amount__c = sAmip2.Negotiated_Pay_Off_Amount__c;
+        opUpdate.Negotiated_Pay_Off_Amount_Start_Date__c = sAmip2.Negotiated_Pay_Off_Amount_Start_Date__c;
+        opUpdate.Negotiated_Pay_Off_Amount_End_Date__c = sAmip2.Negotiated_Pay_Off_Amount_End_Date__c;
+        amipNewNego=[Select Name,Negotiated_Pay_Off_Amount__c,Account__c,Negotiated_Pay_Off_Amount_Start_Date__c,OwnerId,Negotiated_Pay_Off_Amount_End_Date__c,
+                                Application_Number__c,Negotiated_Pay_Off_Attempt_Status__c,Expected_PayOff_balance__c,Actual_received_amount__c,
+                                Attempt_Effort_Type__c, Notes__c,Application__c,Payment_Frequency__c,CreatedDate from Salesforce_AMIP__c where id=:amipNewNego.id];
+        if(amipNewNego.Negotiated_Pay_Off_Attempt_Status__c=='Recovered'){
+                createWriteOffRem(amipNewNego,opUpdate,rem);
+                System.debug('createWriteOffRem##');
+        }
+        adjustRemittance(amipNewNego,false);
+        update opUpdate;
+        sAmipNego.add(amipNewNego);
+        sAmip2.id=null;
+        System.debug('hi3#');
+    }
+    private void calculateValues(){
+        Long sec;
+        Decimal amount;
+        Decimal ratio;
+        Integer noDefDays;
+        Integer payHoldDays;
+        appWraper = new List<ApplicationWrapper>();
+        for(Opportunity op:acc.Opportunities){
+            amount=0;
+            ratio=0;
+            if(op.Total_Payback_Amount__c!=null)
+                totalPurchased +=op.Total_Payback_Amount__c;
+            if(op.Total_Collected_to_Date__c!=null)
+                totalCollectedDate +=op.Total_Collected_to_Date__c;
+            if(op.Total_Payback_Amount__c!=null && op.Total_Collected_to_Date__c!=null)
+               totalOutstand +=(op.Total_Payback_Amount__c - op.Total_Collected_to_Date__c);
+            if(op.Last_Payment_Date__c!=null)
+                noDefDays=Integer.valueOf((BusinessHours.diff(System.Label.BusinessHoursId,op.Last_Payment_Date__c, System.today()))/(9*60*60*1000));
+            if(op.Days_since_last_payment__c!=null && op.Days_since_last_payment__c<sinceLastPayment)
+                sinceLastPayment=op.Days_since_last_payment__c;
+            delayThirty=BusinessHours.add(System.Label.BusinessHoursId, System.today(), 30*9*60*60*1000).date();
+            delaytwo=BusinessHours.add(System.Label.BusinessHoursId, System.today(), 14*9*60*60*1000).date();
+            delaySame=BusinessHours.add(System.Label.BusinessHoursId, System.today(), 7*9*60*60*1000).date();
+            amount=calTotalrecoverableAmount(op);
+            if(amount!=0){
+                ratio=(op.Total_Collected_to_Date__c/amount).setScale(2);
+                totalRecoveravble  +=amount;
+            }
+            else
+            ratio=0.00;
+            payHoldDays=calPaymentHoldDays(op.id);
+            appWraper.add(new ApplicationWrapper(op,amount,ratio,noDefDays,payHoldDays));
+            if(noDefDays!=null && noDefDays < 30)
+                defStatus='Active';
+        }
+    }
+    private Account getAccount(String idk){
+        return ([Select id,name,Time_Zone_Name__c,Primary_Contact__r.Name,Primary_Contact__r.Phone,Primary_Contact__r.Email,
+             State_of_Incorporation__c,Legal_Corporate_Name__c,Business_Start_Date__c,Final_Judgment_Amount__c,
+             ShippingCity,ShippingCountry,ShippingPostalCode,ShippingState,ShippingStreet,
+                           (Select id,Account.id,CloseDate,StageName,Last_Payment_Settle_Date__c,Application_Number__c,Last_Payment_Date__c,Temporary_Payment_Amt__c,Negotiated_Pay_Off_Amount__c,
+                           Amount,Total_ve_Remittances__c,Days_since_last_payment__c,Primary_Contact__c,Daily_Remittance_if_Revenue_Unchanged__c,Temporary_Payment_End_Dt__c,Negotiated_Pay_Off_Amount_End_Date__c,
+                           Total_Payback_Amount__c,Total_Amount_Received__c,Total_Collected_to_Date__c,First_Payment_Received_Date__c,Temporary_Payment_Start_Dt__c,Negotiated_Pay_Off_Amount_Start_Date__c,
+                           SPV_Subsidiary__r.Name,Knight_Funding_Subsidiary__r.Name,Name,Projected_No_of_Payments_Remaining__c,Days__c,First_Payment_Due_Date__c
+                            from Opportunities
+                           where StageName='Funded' OR StageName='Paid-Off' OR StageName='Payment Hold'),
+                          (Select id,First_Name__c,Last_Name__c,Ownership__c,Primary_Owner__c from Owners__r)
+             from Account Where id=:idk Limit 1]);
+    }
+    private void getContacinfo(String idk){
+        for(Contact_Info__c cinfo:[SELECT Phone_Number__c,Email_Address__c FROM Contact_Info__c where Contact__c=:idk and Preferred__c=true]){
+            if(cinfo.Phone_Number__c!=null)
+                acc.Primary_Contact__r.Phone=cinfo.Phone_Number__c;
+            else if(cinfo.Email_Address__c!=null)
+                acc.Primary_Contact__r.Email=cinfo.Email_Address__c;
+        }
+    }
+    private List<OpportunityFieldHistory> getHistory(Set<String> idk){
+        return ([SELECT OldValue,CreatedDate,NewValue,Field,OpportunityId FROM OpportunityFieldHistory where OpportunityId in:idk AND Field='StageName' Order By CreatedDate]);
+    }
+    
+    private List<Salesforce_AMIP__c> getAmip(Set<String> idk){
+        return ([Select Name,Adjusted_Remittance_Amount__c,Adjusted_Remittance_Amount_End_Date__c,Latest_Payment_Date__c,OwnerId,Adjusted_Remittance_Amount_Start_Date__c,Actual_received_amount__c,Manual_Payment_Expected__c,
+                                        Negotiated_Pay_Off_Attempt_Status__c,Attempt_Status__c,Negotiated_Pay_Off_Amount__c,Negotiated_Pay_Off_Amount_Start_Date__c,Negotiated_Pay_Off_Amount_End_Date__c,Application_Number__c,
+                                        Attempt_Effort_Type__c, Notes__c,Application__c,Payment_Frequency__c,CreatedDate from Salesforce_AMIP__c where Application__c IN:idk]);
+    }
+    public class ApplicationWrapper{
+        public Opportunity opp {get;set;}
+        public Decimal totalRecAmount {get;set;}
+        public Decimal ratio {get;set;}
+        public Integer defaultNoDays {get;set;}
+        public Integer payHoldDays {get;set;}
+        ApplicationWrapper(Opportunity opp,Decimal recAmount,Decimal ratio,Integer defaultNodays,Integer payHoldDays){
+            this.opp=opp;
+            this.totalRecAmount=recAmount;
+            this.ratio=ratio;
+            this.defaultNoDays=defaultNodays;
+            this.payHoldDays=payHoldDays;
+        }
+    }
+    private Decimal calTotalrecoverableAmount(Opportunity opp){
+     try{   
+        Decimal networkDays;
+        if(opp.First_Payment_Received_Date__c==null)
+        networkDays=decimal.valueOf(((BusinessHours.diff(System.Label.BusinessHoursId,opp.First_Payment_Due_Date__c,System.today()))/(9*60*60*1000)));
+        else
+        networkDays=decimal.valueOf(((BusinessHours.diff(System.Label.BusinessHoursId,opp.First_Payment_Received_Date__c,System.today()))/(9*60*60*1000)));
+        if(opp.Total_Collected_to_Date__c==null)
+        opp.Total_Collected_to_Date__c=0;
+        return ((opp.Days__c-(opp.Days__c - Math.min(networkDays, opp.Days__c)))*opp.Daily_Remittance_if_Revenue_Unchanged__c)-opp.Total_Collected_to_Date__c;
+    }
+     catch(Exception ex){
+        ApexPages.addMessage(new ApexPages.Message(ApexPages.severity.WARNING,'Either \'1st Payment Due Date\' & \'1st Payment Received Date\' both are blank or Daily \'Remittance if Revenue Unchanged\' is blank on related application'));
+        return 0; 
+    }
+    }
+    
+    public static void computeDate(Boolean beforeCutOffTime,Salesforce_AMIP__c sAmip){
+           String day;
+           if(sAmip.Attempt_Effort_Type__c!='Negotiated Pay-Off Attempt' && sAmip.Adjusted_Remittance_Amount_Start_Date__c == System.today())
+                day='today';
+           else if(sAmip.Attempt_Effort_Type__c!='Negotiated Pay-Off Attempt' && sAmip.Adjusted_Remittance_Amount_Start_Date__c > System.today())
+                day='>today';
+           else
+                day='tomorrow';
+           System.debug('compute#1'+ day);
+           for(AMIP__c am:AMIP__c.getall().values()){
+               if(sAmip.Attempt_Effort_Type__c=='Recovery Attempt' && sAmip.Attempt_Effort_Type__c==am.Effort_Type__c && ((am.Payment_Frequency__c.contains(sAmip.Payment_Frequency__c) && am.Before_CutOff_Time__c==beforeCutOffTime && am.Start_days__c.contains(day))
+                                                                         )){
+                    System.debug('INfor'+am.Start_days__c);
+                    
+                    sAmip.Computed_Payment_Start_Date__c=BusinessHours.add(System.Label.BusinessHoursId, sAmip.Adjusted_Remittance_Amount_Start_Date__c, Integer.valueOf(am.Payment_Days__c +1)*9*60*60*1000).date();
+                    sAmip.Computed_Payment_End_Date__c=BusinessHours.add(System.Label.BusinessHoursId, sAmip.Adjusted_Remittance_Amount_End_Date__c, Integer.valueOf(am.Payment_Days__c +1)*9*60*60*1000).date();
+                }
+               else if(sAmip.Attempt_Effort_Type__c=='Recovery Attempt' && am.Payment_Frequency__c.contains(sAmip.Payment_Frequency__c) && sAmip.Payment_Frequency__c=='Monthly'){
+                    sAmip.Computed_Payment_Start_Date__c=BusinessHours.add(System.Label.BusinessHoursId, sAmip.Adjusted_Remittance_Amount_Start_Date__c,Integer.valueOf(-am.Payment_Days__c)*9*60*60*1000).date();
+                    sAmip.Computed_Payment_End_Date__c=BusinessHours.add(System.Label.BusinessHoursId, sAmip.Adjusted_Remittance_Amount_End_Date__c, Integer.valueOf(am.Payment_Days__c +1)*9*60*60*1000).date();
+               }
+               else if(sAmip.Attempt_Effort_Type__c=='Negotiated Pay-Off Attempt' && sAmip.Attempt_Effort_Type__c==am.Effort_Type__c){
+                    sAmip.Computed_Payment_Start_Date__c=BusinessHours.add(System.Label.BusinessHoursId, sAmip.Negotiated_Pay_Off_Amount_Start_Date__c, Integer.valueOf(am.Payment_Days__c +1)*9*60*60*1000).date();
+                    sAmip.Computed_Payment_End_Date__c=BusinessHours.add(System.Label.BusinessHoursId, sAmip.Negotiated_Pay_Off_Amount_End_Date__c, Integer.valueOf(am.Payment_Days__c +1)*9*60*60*1000).date();
+               }
+           }  
+    }
+    public static Boolean cutOffTime(){
+        DateTime dtGmt = system.now();
+        String gmt4=dtGmt.format('MM/dd/yyyy HH:mm:ss','GMT-4');
+        String[] splitDateTime = gmt4.split(' ');
+        String[] strTime = splitDateTime[1].split(':');
+        Integer myHr = integer.valueOf(strTime[0]);
+        Integer MyMin = integer.valueOf(strTime[1]);
+        Integer mySec = integer.valueOf(strTime[2]);
+        Time t1=Time.newInstance(myHr, MyMin, mySec, 0);
+        Time t2=Time.newInstance(Integer.ValueOf(AMIP__c.getValues('Negotiated'). Cut_Off_Time__c), 0, 0, 0);
+        if(t1<=t2)
+            return true;
+        else
+            return false;
+    }
+    private static Integer getMonth(Salesforce_AMIP__c sAmip1){
+        Integer m1= sAmip1.Adjusted_Remittance_Amount_Start_Date__c.month();
+        Integer m2= sAmip1.Adjusted_Remittance_Amount_End_Date__c.month();
+        Integer y1= sAmip1.Adjusted_Remittance_Amount_Start_Date__c.year();
+        Integer y2= sAmip1.Adjusted_Remittance_Amount_End_Date__c.year();
+        if(y1==y2)
+                return (M2-M1);
+        else{
+                return m2 + (12*(y2 - y1) - m1);
+        }
+    }
+    public static void createWriteOffRem(Salesforce_AMIP__c amipNewNego,Opportunity opUpdate,List<Remittance__c> remm){
+        System.debug('createWriteOffRem##');
+        Remittance__c remitt=new Remittance__c();
+        remitt.Salesforce_AMIP__c=amipNewNego.id;
+        remitt.Application__c=amipNewNego.Application__c;
+        remitt.Customer__c=amipNewNego.Account__c;
+        //remitt.Latest_AMIP_DateTime__c=amipNewNego.CreatedDate;
+        remitt.Payment_Amount__c=opUpdate.Total_Payback_Amount__c - amipNewNego.Expected_PayOff_balance__c;
+        if(remm.size()>0){
+                remitt.Date__c=remm[0].Date__c;
+        }
+        remitt.Status__c='Writeoff-Defaulted Merchant';
+        amipNewNego.Contain_WriteOff_Remittance__c=true;
+        update amipNewNego;
+        insert remitt;
+    }
+    private void adjustRemittance(Salesforce_AMIP__c amipNew,Boolean isRecovery){//using map update viewing amip on page
+        mainListAmip.clear();
+        mainListAmip.addAll(sAmipRec);
+        mainListAmip.addAll(sAmipNego);
+        Map<String,Decimal> updateAmipMap=new Map<String,Decimal>();
+        List<Salesforce_AMIP__c> amc=new List<Salesforce_AMIP__c>();
+        List<Remittance__c> cloneRem=rem.clone();
+        Decimal amount=0;
+        for(Remittance__c remitt:rem){
+                if(remitt.Salesforce_AMIP__c!=null && (remitt.Payment_Status__c=='Cleared' || remitt.Payment_Status__c=='Manual Payment')){
+                        if(updateAmipMap.containsKey(remitt.Salesforce_AMIP__c)){
+                            amount += updateAmipMap.get(remitt.Salesforce_AMIP__c);
+                            updateAmipMap.put(remitt.Salesforce_AMIP__c,amount + remitt.Payment_Amount__c);
+                            amount=0;
+                        }
+                    else{
+                            updateAmipMap.put(remitt.Salesforce_AMIP__c,remitt.Payment_Amount__c);
+                        System.debug('mapooo');
+                    }   
+                }
+            //remitt.Latest_AMIP_DateTime__c=amipNew.CreatedDate;
+            remitt.Salesforce_AMIP__c=amipNew.id;
+        }
+         System.debug('mapooosize##'+mainListAmip.size());
+        if(updateAmipMap.keyset().size()>0){
+            System.debug('mapooo2##');
+            for(Salesforce_AMIP__c amp:mainListAmip){//attention
+                System.debug('mapooo1##'+mainListAmip.size());
+                if(updateAmipMap.containsKey(amp.id) && sAmipRec.size()>0 && sAmipRec.contains(amp)){
+                    sAmipRec.remove(sAmipRec.indexOf(amp));
+                    amp.Actual_received_amount__c -=updateAmipMap.get(amp.id);
+                    sAmipRec.add(amp);
+                    amc.add(amp);
+                    System.debug('mapooo1');
+                }
+                else if(updateAmipMap.containsKey(amp.id) && sAmipNego.size()>0 && sAmipNego.contains(amp)){
+                    sAmipNego.remove(sAmipNego.indexOf(amp));
+                    amp.Actual_received_amount__c -=updateAmipMap.get(amp.id);
+                    sAmipNego.add(amp);
+                    amc.add(amp);
+                }
+            }
+        }
+        if(amc.size()>0)
+                update amc;
+        if(rem.size()>0)
+                update rem;
+    }
+}
