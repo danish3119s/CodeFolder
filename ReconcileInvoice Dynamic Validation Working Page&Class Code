@@ -1,0 +1,643 @@
+<apex:page controller="ReconcileInvoiceController" id="mainPage" language="en_Us"><!-- FOR DatePicker docType="html-5.0" -->
+    <apex:form id="pageform">
+        <apex:stylesheet value="{!URLFOR($Resource.font_awesome, 'css/font-awesome.min.css')}"/>
+        <script type="text/javascript" src="{!URLFOR($Resource.jquery_tablesorter, '/jquery-latest.js')}"></script>
+        <script type="text/javascript" src="{!URLFOR($Resource.jquery_tablesorter, '/jquery.tablesorter.js')}"></script>
+        <script>
+            var jquery = jQuery.noConflict();
+        </script>
+         
+        <script>
+            function enableSort(){
+                 jquery("#reconcileInvoiceTable").tablesorter(); 
+                 jquery("#reconcileInvoiceTable").tablesorter( {sortList: [[1,0]]} )
+                     .tablesorter({widthFixed: true, widgets: ['zebra']});
+                     
+                 unCheckSelectAll();    
+            }
+            
+            jquery(document).ready(function(){
+                enableSort();
+            });
+            function applysorting(){
+                unCheckSelectAll();
+                enableSort();
+            }
+            
+            function selectAllCheckboxes(obj, receivedInputID){
+                var inputCheckBox = document.getElementsByTagName("input");
+                for(var i=0; i<inputCheckBox.length; i++){          
+                    if(inputCheckBox[i].id.indexOf(receivedInputID)!= -1){                                     
+                        inputCheckBox[i].checked = obj.checked;
+                    }
+                }
+            }
+            function unCheckSelectAll(){
+                jquery('.selectAllChk').attr("checked", false);
+            }
+            function validateAllDates(element, fPostDate, bPostDate, b2PostDate, fRecDate, bRecDate, b2RecDate){
+            	var fundingPostDate;
+            	var brokerPostDate;
+            	var broker2PostDate;
+            	var fundingRecDate;
+            	var brokerRecDate;
+            	var broker2RecDate;
+            	if(document.getElementById(fPostDate) != null && document.getElementById(fPostDate) != ''){
+            		fundingPostDate = document.getElementById(fPostDate).value;
+            	}
+            	if(document.getElementById(bPostDate) != null && document.getElementById(bPostDate) != ''){
+            		brokerPostDate = document.getElementById(bPostDate).value;
+            	}
+            	if(document.getElementById(b2PostDate) != null && document.getElementById(b2PostDate) != ''){
+            		broker2PostDate = document.getElementById(b2PostDate).value;
+            	}
+            	
+            	if(document.getElementById(fRecDate) != null && document.getElementById(fRecDate) != ''){
+            		fundingRecDate = document.getElementById(fRecDate).value;
+            	}
+            	if(document.getElementById(bRecDate) != null && document.getElementById(bRecDate) != ''){
+            		brokerRecDate = document.getElementById(bRecDate).value;
+            	}
+            	if(document.getElementById(b2RecDate) != null && document.getElementById(b2RecDate) != ''){
+            		broker2RecDate = document.getElementById(b2RecDate).value;
+            	}
+            	if(((fundingPostDate == null || fundingPostDate == '') && (brokerPostDate == null || brokerPostDate == '') 
+            			&& (broker2PostDate == null || broker2PostDate == '') &&
+            		(fundingRecDate == null || fundingRecDate == '') && (brokerRecDate == null || brokerRecDate == '') 
+            			&& (broker2RecDate == null || broker2RecDate == '')
+          			)){
+            		alert('Please select date first.');
+            		element.checked = false;
+            	}
+            	unCheckSelectAll();
+            }
+            
+            function filterWrapper(){
+                //selectedActiveTab(currentTab);
+            }
+            
+            function validateDate(element, relatedPostDate, elementId, selectCheckBoxId){
+            	var selectedDate = new Date(element.value);
+            	var postDate = new Date(relatedPostDate);
+            	var ele;
+            	var givenPostDateValue;                
+            	if(document.getElementById(elementId) != null && document.getElementById(elementId) != ''){
+            		ele = document.getElementById(elementId).value;
+            	}else{
+            		ele = relatedPostDate;
+            	}	
+            	givenPostDateValue = new Date(ele);
+            	if((relatedPostDate == null || relatedPostDate == '') && (ele == null || ele == '')){
+            		alert('Please enter post date first.');
+            		document.getElementById(selectCheckBoxId).checked = false;
+            		element.value = '';
+            	}else if(selectedDate < postDate){
+            		alert('Reconcile date should be greater than or equal to post date ('+ relatedPostDate +').');
+            		//element.value = relatedPostDate;
+            		element.value = '';
+            		document.getElementById(selectCheckBoxId).checked = false;
+            	}else  if(selectedDate < givenPostDateValue){
+            		alert('Reconcile date should be greater than or equal to post date ('+ ele +').');
+            		//element.value = ele;
+            		element.value = '';
+            		document.getElementById(selectCheckBoxId).checked = false;
+            	}else{
+            		document.getElementById(selectCheckBoxId).checked = true;
+            	}
+                callActionMethod(selectedDate,givenPostDateValue,element,selectCheckBoxId);
+            }
+              var dateString='';  var gon = {};
+             function callActionMethod(selectedDate1,PostDate1,element1,selectCheckBoxId1){                 
+                 var PostDateTimeStamp = Date.parse(PostDate1); //alert(ts);
+                 var RecoSelectedTimestamp = Date.parse(selectedDate1);  //alert(RecoSelectedTimestamp);
+                 if(PostDate1!=null && selectedDate1!=null){  //alert('Inside if==============');
+                    var getDateArray = function(start, end) {
+                        var arr = new Array();
+                        var dt = new Date(start);
+                        while (dt <= end) {
+                            arr.push(new Date(dt));
+                            dt.setDate(dt.getDate() + 1);
+                        }
+                        return arr;
+                    }
+                    var dateArr = getDateArray(PostDate1, selectedDate1); //alert(dateArr.length);
+                     for (var i = 0; i < dateArr.length; i++) {
+                         var Ans=check_holiday (dateArr[i] ) ;
+                         if(Ans === true){   dateString+=formatDate(dateArr[i])+',' ;  }
+                     }
+                     dateString=dateString.slice(0, -1); gon["holiday"] = dateString.split(","); //alert(gon.holiday.length);
+                     var DaysValidation = calculateDays(PostDate1,selectedDate1);
+                     // alert(DaysValidation);
+                     if(DaysValidation != null && DaysValidation>4){
+                         alert('Reconcile Date cannot be 4 business greater than Post Date ');
+                         element1.value = '';
+                         document.getElementById(selectCheckBoxId1).checked = false;
+                          
+                     }
+
+                } dateString=''; gon.holiday.length=0;               
+            }
+    
+        function calculateDays(first,last) {
+            var aDay = 24 * 60 * 60 * 1000,
+                daysDiff = parseInt((last.getTime()-first.getTime())/aDay,10)+1;
+            
+            if (daysDiff>0) {  
+                for (var i = first.getTime(), lst = last.getTime(); i <= lst; i += aDay) {
+                    var d = new Date(i);
+                    if (d.getDay() == 6 || d.getDay() == 0 // weekend
+                        || gon.holiday.indexOf(formatDate(d)) != -1) {
+                        daysDiff--;
+                    }
+                }
+            }
+            return daysDiff;
+        }
+
+        
+        function pad(num) { return ("0" + num).slice(-2); }
+        function formatDate(date) { var d = new Date(date), dArr = [d.getFullYear(), pad(d.getMonth() + 1), pad(d.getDate())];return dArr.join('-');}
+        
+        function check_holiday (dt_date) {
+            
+            
+            
+            // check simple dates (month/date - no leading zeroes)
+            
+            var n_date = dt_date.getDate(),
+                
+                n_month = dt_date.getMonth() + 1;
+            
+            var s_date1 = n_month + '/' + n_date;
+            
+            
+            
+            if (   s_date1 == '1/1'   // New Year's Day
+                
+                || s_date1 == '7/4'   // Independence Day
+                
+                || s_date1 == '12/25' // Christmas Day
+                
+               ) return true;
+            
+            
+            
+            // weekday from beginning of the month (month/num/day)
+            
+            var n_wday = dt_date.getDay(),
+                
+                n_wnum = Math.floor((n_date - 1) / 7) + 1;
+            
+            var s_date2 = n_month + '/' + n_wnum + '/' + n_wday;
+            
+            
+            
+            if (   s_date2 == '1/3/1'  // Birthday of Martin Luther King, third Monday in January
+                
+                || s_date2 == '9/1/1'  // Labor Day, first Monday in September
+                
+                || s_date2 == '11/4/4' // Thanksgiving Day, fourth Thursday in November
+                
+               ) return true;
+            
+            
+            
+            // weekday number from end of the month (month/num/day)
+            
+            var dt_temp = new Date (dt_date);
+            
+            dt_temp.setDate(1);
+            
+            dt_temp.setMonth(dt_temp.getMonth() + 1);
+            
+            dt_temp.setDate(dt_temp.getDate() - 1);
+            
+            n_wnum = Math.floor((dt_temp.getDate() - n_date - 1) / 7) + 1;
+            
+            var s_date3 = n_month + '/' + n_wnum + '/' + n_wday;
+            
+            
+            
+            if (   s_date3 == '5/1/1'  // Memorial Day, last Monday in May
+                
+               ) return true;
+            
+            
+            return false;
+            
+        }     
+            function updateReconcileValue(element, fundingDateValue, reconcileDateId, selectCheckBoxId){
+            	var fundingDate = new Date(fundingDateValue);
+            	var elementValue = new Date(element.value);
+            	if(elementValue < fundingDate){
+            		alert('Post date should be greater than or equal to funding date.');
+            		element.value = '';
+            		document.getElementById(selectCheckBoxId).checked = false;
+            		document.getElementById(reconcileDateId).value = '';
+            	}else{
+            		//document.getElementById(reconcileDateId).value = element.value;
+            		document.getElementById(selectCheckBoxId).checked = true;
+            	}	
+            }
+        </script>
+        <style>
+            span.dateInput span.dateFormat{
+        		display:none;
+        	}	
+            .concileTable {
+                width: 100%;    
+                background-color: #DEECF0;
+                border: 1px solid black;
+            }
+            .concileTr {
+                border: 1px solid black;
+            }
+            tr:hover{
+                background-color:#f5f5f5;
+            }
+            tr:nth-child(odd){
+                background-color: #f2f2f2;
+            }
+            .popupBackground {
+                background-color:black;
+                opacity: 0.20;
+                filter: alpha(opacity = 20);
+                width: 100%;
+                height: 100%;
+                top: 0;
+                left: 0;
+                z-index: 998;
+                position: absolute;
+                cursor:wait;
+            }
+    
+            .commandBTN {
+                border-radius: 10px !important;
+                font-size: 16px !important;
+                margin-right: 0.1in !important;
+                width: auto !important;
+                height: 30px !important;
+                border-color: #75b2dd !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+                padding-left: 10px ! important;
+                padding-right: 10px ! important;
+            }
+            th.header { 
+                background-image: url({!URLFOR($Resource.jquery_tablesorter, '/themes/blue/bg.gif')}); 
+                cursor: pointer; 
+                font-weight: bold; 
+                background-repeat: no-repeat; 
+                background-position: center left; 
+                padding-left: 20px; 
+                border-right: 1px solid #dad9c7; 
+                margin-left: -1px; 
+            } 
+            th.headerSortDown { 
+                background-image: url({!URLFOR($Resource.jquery_tablesorter, '/themes/blue/desc.gif')}); 
+                background-color: #3399FF; 
+            }
+            th.headerSortUp { 
+                background-image: url({!URLFOR($Resource.jquery_tablesorter, '/themes/blue/asc.gif')}); 
+                background-color: #3399FF; 
+            }
+            /* This is for the full screen DIV */
+            .popupBackground {
+                /* Background color */
+                background-color:white;
+                opacity: 0.8;
+                filter: alpha(opacity = 80);
+            
+                /* Dimensions */
+                width: 100%;
+                height: 100%;
+                top: 0;
+                left: 0;
+                z-index: 998;
+                position: fixed;
+                
+                /* Mouse */
+                cursor:wait;
+            }
+            /* This is for the message DIV */
+            .PopupPanel {
+                /* Dimensions */
+                left: 60%;
+                width: 200px;
+                margin-left: -100px;
+                top: 50%;
+                height: 50px;
+                margin-top: -25px;
+                z-index: 999;
+                position: fixed;
+                
+                /* Mouse */
+                cursor:pointer;
+            }
+        </style>
+        <apex:actionStatus id="splashStatus" stopText="">
+            <apex:facet name="start">
+                <div>
+                    <div class="popupBackground" />
+                    <div class="PopupPanel">
+                        <table>
+                            <tr>
+                                <td align="center"><img src="/img/loading.gif" /></td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </apex:facet>
+        </apex:actionStatus>
+        <apex:sectionHeader title="Reconcile Invoice" subtitle="Reconcile Invoice"/>
+        <apex:actionStatus id="statusSaveTrip" stopText="">
+            <apex:facet name="start">
+                <div>
+                    <div class="popupBackground" />
+                </div>
+            </apex:facet>
+        </apex:actionStatus>
+        <apex:pageblock id="pageBlock">
+            <apex:pageBlockSection columns="2" title="Search Criteria">
+                <apex:inputText label="Application #" value="{!strAppNumber}"/>
+                <apex:inputField label="Account" value="{!objOpportunity.accountid}" />
+                <apex:inputField label="Funding Date From" value="{!objOpportunity.Temporary_Payment_Start_Dt__c}"/>
+                <apex:inputField label="Funding Date To" value="{!objOpportunity.Temporary_Payment_End_Dt__c}" id="InvoiceEndDate"/>
+                <apex:inputField label="Company Name" value="{!objOpportunity.SPV_Subsidiary__c}" />
+            </apex:pageBlockSection>
+            <center>
+           		<apex:commandButton styleClass="commandBTN" value="Search" oncomplete="enableSort();"
+                        action="{!filterWrapper}" rerender="msgs, postPbId" status="statusSaveTrip"/>
+                <apex:commandButton oncomplete="enableSort();" status="statusSaveTrip" 
+                styleClass="commandBTN" value="Submit" action="{!processSelectedInvoice}" rerender="msgs, postPbId, reconcileInvoiceOP" />
+            </center><br/>
+            
+            <apex:pageMessages id="msgs" /> <br/>
+            <apex:pageBlock id="postPbId">
+                <apex:outputPanel rendered="{!Invoices.size == 0}">
+                    No record found, Please update search filter...
+                </apex:outputPanel>
+                <apex:outputPanel rendered="{!Invoices.size > 0}" id="reconcileInvoiceOP">
+                    <table id="reconcileInvoiceTable" class="tablesorter concileTable"> 
+                        <thead> 
+                            <tr style="background-color: #dad9c7;">
+                                <td style="padding-top:1%;"><apex:inputCheckbox onclick="selectAllCheckboxes(this,'selectedInputId')" styleClass="selectAllChk" id="postSelectAll"/></td> 
+                                <th><div>Application</div><div>Number</div><div></div></th>
+                                <th><div>Company</div><div>Name</div><div></div></th>
+                                <th><div>Funding</div><div>Date</div><div></div></th> 
+                                <th><div>Amount</div><div></div><div></div></th>
+                                <th><div>Agent/Broker</div><div>Comm</div><div>Amount</div></th>
+                                <th><div>Funding</div><div>Invoice</div><div></div></th>
+                                <th><div>Funding</div><div>Invoice</div><div>Post Date</div></th>
+                                <th><div>Funding</div><div>Invoice</div><div>Reconcile Date</div></th> 
+                                <th><div>Broker</div><div>Invoice</div><div></div></th> 
+                                <th><div>Broker</div><div>Invoice</div><div>Post Date</div></th>
+                                <th><div>Broker</div><div>Invoice</div><div>Reconcile Date</div></th>
+                                <th><div>2nd</div><div>Broker</div><div>Invoice</div></th> 
+                                <th><div>2nd Broker</div><div>Invoice</div><div>Post Date</div></th>
+                                <th><div>2nd Broker</div><div>Invoice</div><div>Reconcile Date</div></th>
+                            </tr> 
+                        </thead>
+                        <tbody>
+                        <apex:repeat value="{!Invoices}" var="invoice" id="pgTablePostTab" >
+                            <tr class="concileTr"> 
+                                <td><apex:inputCheckbox value="{!invoice.isSelected}" id="selectedInputId" onchange="validateAllDates(this, '{!$Component.FIPD}', '{!$Component.BIPD}','{!$Component.BN1PD}', '{!$Component.FIRD}', '{!$Component.BIRD}', '{!$Component.BN1RD}');"/></td>
+                                <td><apex:outputLink target="_blank" value="/{!invoice.objOpportunity.Id}">{!invoice.objOpportunity.Application_Number__c}</apex:outputLink></td> 
+                                <td>
+                                <apex:outputLink rendered="{!invoice.objOpportunity.SPV_Subsidiary__c != null}" target="_blank" value="/{!invoice.objOpportunity.SPV_Subsidiary__c}">{!invoice.objOpportunity.SPV_Subsidiary__r.Name}</apex:outputLink>
+                                <apex:outputLink rendered="{!invoice.objOpportunity.SPV_Subsidiary__c == null}" target="_blank" value="/{!invoice.objOpportunity.Knight_Funding_Subsidiary__c}">{!invoice.objOpportunity.Knight_Funding_Subsidiary__r.Name}</apex:outputLink>
+                                </td> 
+                                <td>
+                                    <apex:outputText value="{0,date,MM/dd/yyyy}"> 
+                                        <apex:param value="{!invoice.objOpportunity.Funding_Date__c}"/>
+                                    </apex:outputText>
+                                </td>
+                                <td>
+	                                <apex:outputText value="{0, number,#,##,###.00}">
+	                       				<apex:param value="{!invoice.objOpportunity.amount}" />
+	                       			</apex:outputText>
+                                </td>
+                                <td>
+                                	<apex:outputText value="{0, number,#,##,###.00}">
+	                       				<apex:param value="{!invoice.objOpportunity.Agent_Broker_Comm_Amount__c}" />
+	                       			</apex:outputText>
+                                	<apex:outputText value=""/>
+                               	</td>
+                                <td><apex:outputLink target="_blank" value="/{!invoice.objOpportunity.Funding_Invoice__r.Id}">{!invoice.objOpportunity.Funding_Invoice__r.Name}</apex:outputLink></td>
+                              	<td>
+                              		<apex:inputField id="FIPD" onchange="updateReconcileValue(this,'{!invoice.objOpportunity.Funding_Date__c}', '{!$Component.FIRD}', '{!$Component.selectedInputId}');"  value="{!invoice.objOpportunity.Funding_Invoice_Post_Date__c}" rendered="{!AND(invoice.objOpportunity.Funding_Invoice_Post_Date__c == null, invoice.objOpportunity.Funding_Invoice__c != null)}"/>
+                              		<apex:outputField value="{!invoice.objOpportunity.Funding_Invoice_Post_Date__c}" rendered="{!invoice.objOpportunity.Funding_Invoice_Post_Date__c != null}"/>
+                            	</td>
+                                <td>
+                                	<apex:inputField id="FIRD" value="{!invoice.objOpportunity.Funding_Invoice_Reconcile_Date__c}" rendered="{!AND(invoice.objOpportunity.Funding_Invoice_Reconcile_Date__c == null, invoice.objOpportunity.Funding_Invoice__c != null)}"
+                                		onchange="validateDate(this, '{!invoice.objOpportunity.Funding_Invoice_Post_Date__c}', '{!$Component.FIPD}', '{!$Component.selectedInputId}');"/>
+                                	<apex:outputField value="{!invoice.objOpportunity.Funding_Invoice_Reconcile_Date__c}" rendered="{!invoice.objOpportunity.Funding_Invoice_Reconcile_Date__c != null}"/>
+                               	</td>
+                                
+                                <td><apex:outputLink target="_blank" value="/{!invoice.objOpportunity.Broker_Invoice__r.Id}">{!invoice.objOpportunity.Broker_Invoice__r.Name}</apex:outputLink></td>
+                                <td>
+                                	<apex:inputField id="BIPD" onchange="updateReconcileValue(this,'{!invoice.objOpportunity.Funding_Date__c}', '{!$Component.BIRD}', '{!$Component.selectedInputId}');" value="{!invoice.objOpportunity.Broker_Invoice_Post_Date__c}" rendered="{!AND(invoice.objOpportunity.Broker_Invoice_Post_Date__c == null, invoice.objOpportunity.Broker_Invoice__c != null)}"/>
+                                	<apex:outputField value="{!invoice.objOpportunity.Broker_Invoice_Post_Date__c}" rendered="{!invoice.objOpportunity.Broker_Invoice_Post_Date__c != null}"/>
+                                </td>
+                                <td>
+                                	<apex:inputField id="BIRD" value="{!invoice.objOpportunity.Broker_Invoice_Reconcile_Date__c}" rendered="{!AND(invoice.objOpportunity.Broker_Invoice_Reconcile_Date__c == null, invoice.objOpportunity.Broker_Invoice__c != null)}"
+                                		onchange="validateDate(this, '{!invoice.objOpportunity.Broker_Invoice_Post_Date__c}','{!$Component.BIPD}', '{!$Component.selectedInputId}');"/>
+                                	<apex:outputField value="{!invoice.objOpportunity.Broker_Invoice_Reconcile_Date__c}" rendered="{!invoice.objOpportunity.Broker_Invoice_Reconcile_Date__c != null}"/>
+                               	</td>
+                                
+                                <td><apex:outputLink target="_blank" value="/{!invoice.objOpportunity.Broker_Invoice1__r.Id}">{!invoice.objOpportunity.Broker_Invoice1__r.Name}</apex:outputLink></td>
+                                <td>
+                                	<apex:inputField id="BN1PD" onchange="updateReconcileValue(this,'{!invoice.objOpportunity.Funding_Date__c}', '{!$Component.BN1RD}', '{!$Component.selectedInputId}');" value="{!invoice.objOpportunity.X2nd_Broker_Invoice_Post_Date__c}" rendered="{!AND(invoice.objOpportunity.X2nd_Broker_Invoice_Post_Date__c == null, invoice.objOpportunity.Broker_Invoice1__c != null)}"/>
+                                	<apex:outputField value="{!invoice.objOpportunity.X2nd_Broker_Invoice_Post_Date__c}" rendered="{!invoice.objOpportunity.X2nd_Broker_Invoice_Post_Date__c != null}"/>
+                               	</td>
+                                <td>
+                                	<apex:inputField id="BN1RD" value="{!invoice.objOpportunity.X2nd_Broker_Invoice_Reconcile_Date__c}" rendered="{!AND(invoice.objOpportunity.X2nd_Broker_Invoice_Reconcile_Date__c == null, invoice.objOpportunity.Broker_Invoice1__c != null)}" 
+                                				onchange="validateDate(this, '{!invoice.objOpportunity.X2nd_Broker_Invoice_Post_Date__c}','{!$Component.BN1PD}', '{!$Component.selectedInputId}');"/>
+                                	<apex:outputField value="{!invoice.objOpportunity.X2nd_Broker_Invoice_Reconcile_Date__c}" rendered="{!invoice.objOpportunity.X2nd_Broker_Invoice_Reconcile_Date__c != null}"/>
+                               	</td>
+                            </tr>
+                        </apex:repeat>
+                        </tbody>
+                        <tfoot>
+                        	<tr>
+                        		<td></td>
+                        		<td colspan="2"><b>{!$LABEL.Reconcile_Total_Records} {!Invoices.size}</b></td>
+                        		<td><b>$
+                        		<apex:outputText value="{0, number,#,##,###.00}">
+                       				<apex:param value="{!TotalAmount}" />
+                       			</apex:outputText>
+                        		</b></td>
+                        		<td><b>$
+                        		<apex:outputText value="{0, number,#,##,###.00}">
+                        			<apex:param value="{!TotalCommision}" />
+                       			</apex:outputText>
+                        		</b></td>
+                        	</tr>	
+                        </tfoot>
+                    </table>
+                </apex:outputPanel>
+            </apex:pageBlock>
+                   
+        </apex:pageblock>
+         </apex:form> 
+</apex:page>
+
+
+
+===================================================================================================================
+public class ReconcileInvoiceController {
+ 
+    //Search Filter 
+    public String strAppNumber {get;set;}
+    public Opportunity objOpportunity {get;set;} //Dummy variable to show date picker on the page (Temporary_Payment_Start_Dt__c, Temporary_Payment_End_Dt__c)
+    public Decimal TotalAmount {get;set;}
+    public Decimal TotalCommision {get;set;}
+    //wrapper
+    public List<Invoice> Invoices {get;set;}
+    
+    public ReconcileInvoiceController(){
+        objOpportunity = new Opportunity();
+        Invoices = new List<Invoice>();
+        objOpportunity.Temporary_Payment_Start_Dt__c = system.today().adddays(-15);
+        objOpportunity.Temporary_Payment_End_Dt__c = system.today();
+        TotalAmount = 0;
+        TotalCommision = 0;
+        filterWrapper();
+       
+    }
+    
+    public PageReference filterWrapper(){
+        Invoices = new List<Invoice>();
+        if(objOpportunity.Temporary_Payment_Start_Dt__c > objOpportunity.Temporary_Payment_End_Dt__c){
+            ApexPages.addmessage(new ApexPages.message(ApexPages.severity.ERROR,'Start date should not be greater than end date.'));
+            return null;
+        }else if (objOpportunity.Temporary_Payment_Start_Dt__c == null && objOpportunity.Temporary_Payment_End_Dt__c != null){
+            ApexPages.addmessage(new ApexPages.message(ApexPages.severity.ERROR,'Please enter start date.'));
+            return null;
+        }else  if(objOpportunity.Temporary_Payment_Start_Dt__c != null && objOpportunity.Temporary_Payment_End_Dt__c == null){
+            objOpportunity.Temporary_Payment_End_Dt__c = system.today();
+        }
+        
+        String strOpportunitySOQL = Label.Reconcile_Soql + ' '+ Label.Reconcile_Soql_Where;
+
+        if(objOpportunity.AccountID != null && String.isNotBlank(objOpportunity.AccountID)){
+            strOpportunitySOQL += ' AND AccountId =\''+objOpportunity.AccountId+'\'';
+        }
+
+        if(String.isNotBlank(strAppNumber)){
+        	String trimedAppNumber = strAppNumber.deleteWhitespace();
+            strOpportunitySOQL += ' AND Application_Number__c = : trimedAppNumber ';
+        }
+        if(objOpportunity.SPV_Subsidiary__c != null){
+        	strOpportunitySOQL += ' AND ( SPV_Subsidiary__c =\''+objOpportunity.SPV_Subsidiary__c +'\' OR';
+        	strOpportunitySOQL += '  Knight_Funding_Subsidiary__c =\''+objOpportunity.SPV_Subsidiary__c +'\' ) ';
+        }
+            
+        if(objOpportunity.Temporary_Payment_Start_Dt__c != null && objOpportunity.Temporary_Payment_End_Dt__c != null){
+            /*
+            DateTime startDate = datetime.newInstance(objOpportunity.Temporary_Payment_Start_Dt__c.year(),objOpportunity.Temporary_Payment_Start_Dt__c.month(),
+            											objOpportunity.Temporary_Payment_Start_Dt__c.day(),01,00,01);
+            DateTime endDate = datetime.newInstance(objOpportunity.Temporary_Payment_End_Dt__c.year(),objOpportunity.Temporary_Payment_End_Dt__c.month(),
+            											objOpportunity.Temporary_Payment_End_Dt__c.day(),23,59,59);
+            String startDateQuery = startDate.format('yyyy-MM-dd\'T\'hh:mm:ss\'Z\'');
+            String endDateQuery  = endDate.format('yyyy-MM-dd\'T\'hh:mm:ss\'Z\'');
+           	strOpportunitySOQL += ' AND (Funded_Time__c >= '+startDateQuery +'AND Funded_Time__c <= '+endDateQuery+') ';
+           	*/
+           	String startDate;
+           	//As we have added code on 01-Nov we need to add only those app who is funded/close date after this date.
+           	if(objOpportunity.Temporary_Payment_Start_Dt__c < Date.valueOf('2017-11-01T00:00:00Z') && !Test.isRunningTest()){
+	        	startDate  = String.valueOf(date.parse('11/01/2017'));
+	        }else{
+	           	startDate = String.valueOf(objOpportunity.Temporary_Payment_Start_Dt__c);
+	        }
+           	
+            String endDate = String.valueOf(objOpportunity.Temporary_Payment_End_Dt__c);
+            strOpportunitySOQL += ' AND (Funding_Date__c >= '+ startDate +' AND Funding_Date__c <= '+endDate+') ';
+        }
+        
+        strOpportunitySOQL += Test.isRunningTest() ?' LIMIT 10' : ' LIMIT 999 ';
+         List<Opportunity> opportunityList = new List<Opportunity>();
+        if(String.isNotBlank(strOpportunitySOQL)){
+            system.debug('strOpportunitySOQL====>'+strOpportunitySOQL);
+        	opportunityList = Database.query(strOpportunitySOQL);
+        }
+        TotalAmount = 0;
+        TotalCommision = 0;
+        
+        if(opportunityList.size() > 0){
+            for(Opportunity opp : opportunityList){
+            	TotalAmount += opp.Amount;
+            	TotalCommision += opp.Agent_Broker_Comm_Amount__c;
+                invoices.add(new invoice(opp));
+            }
+        }
+        
+        system.debug('invoices size()====>'+invoices.size());
+        return null;
+    } 
+    
+    public void processSelectedInvoice(){
+    	List<Opportunity> oppToUpdate = new List<Opportunity>();
+    	system.debug('Invoices.size()====>'+Invoices.size());
+    	for(Invoice wrp : Invoices){
+            if(wrp.isSelected){
+            	
+            	if(wrp.objOpportunity.Funding_Invoice_Post_Date__c == null 
+            		&& (wrp.objOpportunity.Broker_Invoice__c != NULL && wrp.objOpportunity.Broker_Invoice_Post_Date__c == null) 
+            		&& (wrp.objOpportunity.Broker_Invoice1__c != NULL && wrp.objOpportunity.X2nd_Broker_Invoice_Post_Date__c == null)){
+            		
+            		ApexPages.addmessage(new ApexPages.message(ApexPages.severity.ERROR,'Invalid data: Please enter date values.'));
+            		filterWrapper();
+            		if(!Test.isRunningTest())return ;
+            	}else if(wrp.objOpportunity.Funding_Invoice_Post_Date__c == null && wrp.objOpportunity.Broker_Invoice_Post_Date__c == null 
+            		&& wrp.objOpportunity.X2nd_Broker_Invoice_Post_Date__c == null){
+            		ApexPages.addmessage(new ApexPages.message(ApexPages.severity.ERROR,'Invalid data: Please enter date values.'));
+            		filterWrapper();
+            		if(!Test.isRunningTest())return ;
+            	}else{
+            		oppToUpdate.add(wrp.objOpportunity);
+        		}	
+            }
+    	}
+    	system.debug('oppToUpdate===>'+oppToUpdate.size());
+    	if(oppToUpdate.size() == 0){
+    		ApexPages.addmessage(new ApexPages.message(ApexPages.severity.ERROR,'Invalid data: Please select one record.'));
+    		filterWrapper();
+    		return ;
+    	}else if(oppToUpdate.size() > 0){
+			OpportunityTriggerHandler.isOppTriggerRun = false;
+    		try{
+    			update oppToUpdate;
+    		}catch(Exception ex){
+    			ApexPages.addmessage(new ApexPages.message(ApexPages.severity.ERROR,+ex.getMessage()));
+            	return ;
+    		}
+    	}
+    	filterWrapper();
+    }
+    
+    public Date setStringToDateFormat(String myDate) {
+       String[] strDate = myDate.split('-');
+       Integer myIntDate = integer.valueOf(strDate[1]);
+       Integer myIntMonth = integer.valueOf(strDate[0]);
+       Integer myIntYear = integer.valueOf(strDate[2]);
+       Date d = Date.newInstance(myIntYear, myIntMonth, myIntDate);
+       d.format();
+       return d;
+    }
+    
+
+    
+    //Wrapper class
+    public class Invoice{
+        public Boolean isSelected { get; set; }
+        public Opportunity objOpportunity { get; set; }
+        
+        public Invoice(Opportunity objOpportunity) {
+        	isSelected =  test.isRunningTest()?true:false;
+        	this.objOpportunity = objOpportunity;
+        }
+    }
+}
+
+
