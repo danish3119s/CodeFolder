@@ -1,0 +1,82 @@
+trigger OpportunityTrigger on Opportunity (before update, before insert, after insert,after update, after delete, after undelete) {  
+   Trigger_Execution__c triggerExecution = Trigger_Execution__c.getValues('OpportunityTrigger');
+   if(triggerExecution != null && triggerExecution.Run__c && OpportunityTriggerHandler.isOppTriggerRun){
+    if(Trigger.isInsert){
+        if(Trigger.isBefore){
+            DeclineDupesForInhouseRenewals.appsToDecline(Trigger.new, Trigger.oldMap);//Case #00112720 
+            BlacklistedLogicOnOpportunity.declineOpps(Trigger.new); // Case # 00047585, 00110893
+            if(CopyOpportunityFieldsNew.runOnceBeforeInsert()) CopyOpportunityFieldsNew.copyOpportunityBeforeInsert(Trigger.new);
+            BrokerInActive.potentialDupeInserted(Trigger.new);
+            RenewalGraceLogic.declineOnInsertForPaidOff(Trigger.new, null); //Case # 00078405
+            BlacklistedBrokerAccount.newOpportunityOnBlackListedBroker(Trigger.new); // Case # 00063439
+            UpdateAccountForRemmitance.collectionDatesNull(Trigger.new);
+            PreviousStageValues.previousStageName(Trigger.new, NULL);
+            RenewalAppOwnerAssignment.renewalAppOwner(Trigger.new, NULL);
+            Underwriter.underwiterOnNewDealAndDupe(Trigger.new, NULL); //Case # 00070417
+        }
+        else{
+            if(CopyOpportunityFieldsNew.runOnceAfterInsert()) CopyOpportunityFieldsNew.copyOpportunityAfterInsert(Trigger.new);
+            if(WeeklySubmissionCount.runOnce()) WeeklySubmissionCount.opptyInsert(Trigger.new);
+            socialData.socialDataTrigger(Trigger.New, null);
+            OutsideBidLeadOnInsideSalesDecline.insideSalesDecline(Trigger.new, NULL); //Case 00112576 - Create outside bid for apps going to Broker Neg due to FirstBlood Logic
+            //BrokerAccountOwnerAssignment.tigerFundingAppCountOnInsert(Trigger.new);
+        }
+    }else if(Trigger.isUpdate){
+        if(Trigger.isBefore){
+            DeclineDupesForInhouseRenewals.appsToDecline(Trigger.new, Trigger.oldMap);//Case #00112720 
+            AutoDeclineCriteria.declineOnCriteria(Trigger.new); //Case # 00111635
+            if(CopyOpportunityFieldsNew.runOnceBeforeUpdate()) CopyOpportunityFieldsNew.copyOpportunityBeforeUpdate(Trigger.new, Trigger.oldMap);
+            CopyOpportunityFieldsRenewal.copySizingDataForRenewals(Trigger.new, Trigger.oldMap); // Case # 00112759
+            SalesToPaymentCalculation.calculateSalesToPayment(Trigger.new);
+            if(socialData.runOnce()) socialData.socialDataTrigger(Trigger.New, Trigger.oldMap);
+            BrokerInActive.brokerUpdated(Trigger.new, Trigger.oldMap);
+            Underwriter.underwiterOnNewDealAndDupe(Trigger.new, Trigger.oldMap); //Case # 00070417
+            BlacklistedBrokerAccount.newOpportunityOnBlackListedBroker(Trigger.new); // Case # 00063439
+            BlacklistedLogicOnOpportunity.declineOpps(Trigger.new); // Case # 00047585
+            UpdateContactEmailOnApplication.filterVerifiedOpps(Trigger.newMap, Trigger.oldMap);
+            OfferCalculationOnComissionOverride.commissionOverriden(Trigger.new, Trigger.oldMap);
+            UpdateAccountForRemmitance.statusDate(Trigger.new, Trigger.oldMap);
+            PreviousStageValues.previousStageName(Trigger.new, Trigger.oldMap);
+            StatusCompletionDates.UpdateStatusCompletionDates(Trigger.new, Trigger.oldMap);
+            ProcessingVolumeAverageOnFundingApp.averageVolumneOnFundingApp(Trigger.new, Trigger.oldMap);
+            FirstPaymentDueDate.firstPaymentDateOnApp(Trigger.new, Trigger.oldMap);
+            RenewalAppOwnerAssignment.renewalAppOwner(Trigger.new, Trigger.oldMap);
+            RenewalLeadOnFunded.paidOffFunded(Trigger.new, Trigger.oldMap); //Case # 00057861
+            CollectionsToFundedDateTime.collectionsDatTime(Trigger.new, Trigger.oldMap);
+            if(RenewalGraceLogic.runOnce()) RenewalGraceLogic.declineOnInsertForPaidOff(Trigger.new, Trigger.oldMap);//Case # 00078405
+            if(WeeklySubmissionCount.runOnce()) WeeklySubmissionCount.opptyUpdated(Trigger.new, Trigger.oldMap);
+            BrokerCommissionRecovery.commisionPaidOnFunded(Trigger.new, Trigger.oldMap);
+            if(OpportunityValidationOnProcessingVolume.runOnce())  OpportunityValidationOnProcessingVolume.oppProcessingVolume(Trigger.new);//Case # 00112326
+            LendioCommissionOnFundedApp.calculateLendioCommissionOnFundedApp(Trigger.new, Trigger.oldMap);//Case #00113507
+            ValidateScorecardReportEntries.ValidateScoreCardModel(Trigger.new, Trigger.oldMap); // Case # 00112344
+        }else{
+            if(CopyOpportunityFieldsNew.runOnceAfterUpdate()){
+                CopyOpportunityFieldsNew.copyOpportunityAfterUpdate(Trigger.new, Trigger.oldMap);
+                BankVolumeInfoOnLead.lastThreeMonthsVolumeOnLead(Trigger.new, Trigger.oldMap);
+            }
+            if(!DecisionLogic.isUpdated) DecisionLogic.InvokeRequest(trigger.new, Trigger.oldMap);
+            ScorecardProbabilityPredictionAPI.filterUnderWrittenApplications(Trigger.new, Trigger.oldMap);
+            PotentialDuplicate.potentialDuplicateOnContractIn(Trigger.new, Trigger.oldMap);
+            if(ClearApiSecondaryOwner.runOnce()) ClearApiSecondaryOwner.onContractIn(Trigger.new, Trigger.oldMap);
+            InsertCommunityDetail.communityDetailOnFundedOpportunity(Trigger.new, Trigger.oldMap);
+            IdentifyingScorecardModel.scorecardOnFunding(Trigger.new, Trigger.oldMap);
+            OpptyTeamMembers.addRemoveMembersOnStage(Trigger.new, Trigger.oldMap);//Case # 00057380
+            OutsideBidLeadOnInsideSalesDecline.insideSalesDecline(Trigger.new,Trigger.oldMap); //Case # 00057380
+            RenewalEligibleIneligibleLogic.oppsOnPaymentHold(Trigger.new , Trigger.oldMap); //Case # 00068268
+            ReengagementView.fundedOpps(Trigger.new, Trigger.oldMap);
+            //InEligibleForRenewal.paidOff(Trigger.new, Trigger.oldMap); //Case # 00110980
+            //UpdateContactTotalFundedAmount.totalFundedThisMonth(Trigger.new);//Case # 00111645   
+            //StatusCompletionDates.createNewAppSupportAppStatusIsFunded(Trigger.new,Trigger.oldMap);//Case # 00112139
+            OutsideBidPartners.validateOppsForKCFPartnerSync(Trigger.newMap,Trigger.oldMap); // Case# 00112408 - Everytime APP is updated, sync the outside bid KCF partner with the corresponding information
+            //BrokerAccountOwnerAssignment.tigerFundingAppCountonUpdate(Trigger.new,Trigger.oldMap);     //Case# 00112463 - Updated tiger app count on account for sharing with tiger reps
+            BrokerCommissionRecovery.calcTotalCommissionForRecovery(Trigger.new, Trigger.oldMap);
+            BrokerCommissionRecovery.recoverCommissionFromFundedApps(Trigger.new, Trigger.oldMap);
+        }
+    }else if(Trigger.isUndelete){
+        if(WeeklySubmissionCount.runOnce()) WeeklySubmissionCount.opptyInsert(Trigger.new);
+        
+    }else{
+        if(WeeklySubmissionCount.runOnce()) WeeklySubmissionCount.opptyDeleted(Trigger.old);
+    }
+  }
+}
