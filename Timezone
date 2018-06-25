@@ -1,0 +1,39 @@
+//Case # 00111488
+public with sharing class TimeZone {
+
+    public static void updateTimeZone(Set<String> accountIds){
+        Account[] accountsToUpdate = new Account[]{};
+      
+        for(Account acc :  [SELECT ID, ShippingLatitude, ShippingLongitude, Time_Zone_Name__c 
+                                    FROM Account WHERE Id IN: accountIds]){
+
+            GoogleTimeZoneResponse timeResponse = getTimeZone(String.valueOf(acc.ShippingLatitude), String.valueOf(acc.ShippingLongitude));
+            System.debug('##timeResponse'+timeResponse);
+            acc.Time_Zone_Name__c = timeResponse.timeZoneName;
+            accountsToUpdate.add(acc);
+        }
+
+        if(accountsToUpdate.size() != 0) update accountsToUpdate;
+    }
+    
+    static GoogleTimeZoneResponse getTimeZone(String latitude, String longitude){
+        String Timestamp=String.valueof(( DateTime.now().getTime())/1000);
+        String endpoint = 'https://maps.googleapis.com/maps/api/timezone/json?location=' +latitude+ ',' +longitude+'&timestamp='+Timestamp;
+       
+        Http h = new Http();
+        
+        // Instantiate a new HTTP request, specify the method (GET) as well as the endpoint
+        HttpRequest req = new HttpRequest();
+        System.debug('req--'+req);
+        req.setEndpoint(endpoint);
+        req.setMethod('GET');
+
+        // Send the request, and return a response
+        HttpResponse res;
+        
+        if(!Test.isRunningTest())
+            return GoogleTimeZoneResponse.parse(h.send(req).getBody()); 
+        else 
+            return GoogleTimeZoneResponse.parse(GoogleTimeZoneResponseTest.json); 
+    }
+}
