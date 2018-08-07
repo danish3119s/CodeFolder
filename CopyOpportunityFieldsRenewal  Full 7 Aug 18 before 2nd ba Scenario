@@ -1,0 +1,285 @@
+//00113004  Renewals through portal
+//Case# 00114255 - Renewal Improvement
+public with sharing class CopyOpportunityFieldsRenewal {
+    
+    public static Boolean runOnce = true;
+    
+    public static Boolean runOnce(){
+        if(runOnce == true){
+            runOnce = false;
+            return true;
+        }
+        else
+            return false;
+    }
+    
+    public static void copySizingDataForRenewals(List<Opportunity> newOpps, 
+                                                    Map<Id, Opportunity> oldOpps){
+        
+        Map<Id, Id> originalRenewalApp = new Map<Id, Id>();
+
+        for(Opportunity opp : newOpps){
+            if(opp.StageName == 'Underwriting' && 
+                    opp.StageName != oldOpps.get(opp.Id).StageName && 
+                    oldOpps.get(opp.Id).StageName == 'Qualified Application' && 
+                    String.isNotBlank(opp.Renewing_App__c) && (opp.Type == 'Renewal' || 
+                    opp.Type == 'Parallel' || opp.Type == 'Paid Renewal'))
+                originalRenewalApp.put(opp.Id, opp.Renewing_App__c);
+        }
+        if(originalRenewalApp.size() != 0) updateSizingInfo(originalRenewalApp);
+    }
+    
+    //Copy Sizing Data and Related Fields
+    @future
+    static void updateSizingInfo(Map<Id, Id> originalRenewalApp){
+        CopyOpportunityFieldsRenewal.runOnce();
+        Map<Id, Opportunity> opps = new Map<Id, Opportunity>(getRenewalOpps(originalRenewalApp));
+        //Map<Id, Set<Id>> oldNewOppId = new Map<Id, Set<Id>>();
+        Map<Id, Id> oppsWithacc = new Map<Id, Id>();
+        Opportunity[] oppsToUpdate = new Opportunity[]{};
+
+        for(Id originalOpp : originalRenewalApp.keySet()){
+            Id renewalApp = originalRenewalApp.get(originalOpp);
+            
+            if(opps.containsKey(originalOpp) && opps.containsKey(renewalApp)){
+                Opportunity updatedOpp =updateFields(opps.get(originalOpp) , opps.get(renewalApp));
+                updatedOpp.Underwriting_Approval__c = null;
+                oppsToUpdate.add(updatedOpp);
+            }
+
+            if(opps.containsKey(originalOpp) && opps.containsKey(renewalApp)){
+                if(!oppsWithacc.containsKey(originalOpp)){
+                    oppsWithacc.put(originalOpp,opps.get(originalOpp).AccountId);
+                }
+            }
+
+            //if(!oldNewOppId.containsKey(renewalApp))
+              //  oldNewOppId.put(renewalApp, new Set<Id>());
+            //oldNewOppId.get(renewalApp).add(originalOpp);
+        }
+        
+        if(oppsToUpdate.size() != 0) update oppsToUpdate;
+        //if(oldNewOppId.size() != 0)  copyRelatedLists(oldNewOppId);
+        if(oppsWithacc.size() != 0)  copyRelatedLists(oppsWithacc);
+    }
+
+
+    public static void copyRelatedLists( Map<Id, Id> oppsWithacc){   
+        List<Processing_Volume__c> processingVolumesToInsert = new List<Processing_Volume__c>();
+        List<Competitor__c> competitorsToInsert = new List<Competitor__c>();
+        Set<String> checkpvSet = new Set<String>();
+        Set<String> checkCompSet = new Set<String>();
+        Set<Id> toDelete = new Set<Id>();
+        
+        toDelete.addAll(oppsWithacc.keySet());
+        Processing_Volume__c[] pvToDelete = [SELECT Id FROM Processing_Volume__c WHERE Application__c IN :toDelete];
+        Competitor__c[] competitorsToDelete = [SELECT Id FROM Competitor__c  WHERE Application__c IN :toDelete];
+        if(pvToDelete.size() != 0) delete pvToDelete;
+        if(competitorsToDelete.size() != 0) delete competitorsToDelete;
+    
+        //Pv code Base 
+        Map<Id, List<Processing_Volume__c>> accWithProcessingVolumes = getAccountIdWithProcessingVolumes(oppsWithacc);
+        Map<Id, List<Competitor__c>> accWithCompetitors = getAccountIdWithCompetitors(oppsWithacc);
+
+        for(Id newAppId : oppsWithacc.keySet()){
+            if(accWithProcessingVolumes.containsKey(oppsWithacc.get(newAppId))){
+                processingVolumesToInsert.addAll(getProcessingVolumesToInsert(
+                                            accWithProcessingVolumes.get(oppsWithacc.get(newAppId)), newAppId));
+            }
+                      
+            if(accWithCompetitors.containsKey(oppsWithacc.get(newAppId))){
+                competitorsToInsert.addAll(getCompetitorsToInsert(
+                                        accWithCompetitors.get(oppsWithacc.get(newAppId)), 
+                                        newAppId));
+            }     
+        }                                                         
+     
+        if(processingVolumesToInsert.size() != 0)   insert processingVolumesToInsert;  
+        if(competitorsToInsert.size() != 0) insert competitorsToInsert;                                                                 
+    }
+    
+    static Opportunity[] getRenewalOpps(Map<Id, Id> renewalOriginalApp){
+        Set<Id> idsToQuery = new Set<Id>();
+        idsToQuery.addAll(renewalOriginalApp.keySet());
+        idsToQuery.addAll(new Set<Id>(renewalOriginalApp.values()));
+        return [SELECT Id, Amount, BN_Funding_Amount__c, X1st_Broker_Negotiation_Date__c, 
+                        Sales_to_Payment__c, Purchase__c, Average_Daily_Negatives__c, Average_Monthly_Sales__c, 
+                        Average_Processing_Volume__c, Avg_Daily_Bank_Balance__c, 
+                        Avg_Number_of_Monthly_Deposits__c, CC_Purchase__c,
+                        Conditional_Offer_Details__c, Conditional_List__c, Days__c, BN_Days__c, Factor_Rate__c,
+                        BN_Factor_Rate__c, Funding_Amount_Requested__c, Inception_Date__c, 
+                        Missing_Documents__c, Position__c, Primary_Owner_Email__c, Secondary_Owner_Email__c,
+                        Total_Daily_Payments__c, Total_Monthly_Payments__c, Underwriting__c,
+                        Underwriting_Approval__c, zPrimaryOwnerEmail__c, zSecondaryOwnerEmail__c, 
+                        Scorecard_Probability__c, Scorecard_Probability_Error__c, Volume_Last_Month__c,
+                        Volume_Two_Months_Ago__c, Volume_Three_Months_Ago__c, Volumen_4_Months_Ago__c, 
+                        Volume_5_Months_Ago__c, Volume_6_Months_Ago__c, Original_UnderWriter__c,
+                        Previous_Month_Daily_Negatives__c, Payment_Frequency__c, Day_of_Week__c, 
+                        Payment_Method__c,AccountId FROM Opportunity WHERE Id IN: idsToQuery];
+    }
+    
+    public static Opportunity updateFields(Opportunity oppToUpdate,Opportunity originalOpp){
+        oppToUpdate.Primary_Owner_Email__c = originalOpp.Primary_Owner_Email__c;
+        oppToUpdate.Secondary_Owner_Email__c = originalOpp.Secondary_Owner_Email__c;
+        oppToUpdate.zPrimaryOwnerEmail__c = originalOpp.zPrimaryOwnerEmail__c;
+        oppToUpdate.zSecondaryOwnerEmail__c = originalOpp.zSecondaryOwnerEmail__c;
+        return oppToUpdate;
+    }
+
+    static  Map<Id, List<Processing_Volume__c>> getAccountIdWithProcessingVolumes(Map<Id, Id> oppsWithacc){
+        Map<Id, List<Processing_Volume__c>> accWithProcessingVolumes = new Map<Id, List<Processing_Volume__c>>();
+        Set<String> uniquekeys = new Set<String>();
+        Set<String> deductionsAppIdSet = new Set<String>();
+        for(Processing_Volume__c pv :[Select ID, of_Daily_Negatives__c, Amount__c, Amount_w_Deductions__c, 
+                                      Avg_Daily_Bank_Balance__c, Description__c, Application__c, 
+                                      Avg_Number_of_Monthly_Deposits__c, Month__c, RecordTypeID,
+                                      Bank__c,AccountId__c From Processing_Volume__c WHERE 
+                                      AccountId__c IN : oppsWithacc.values()
+                                      AND Month__c >= LAST_N_MONTHS:12 ORDER BY AccountId__c,Application__c DESC ,RecordTypeId 
+                                      DESC ,CreatedDate  ]){
+                                          String uniqueKey = String.valueOf(pv.Bank__c)+ ' - '+String.valueOf(pv.Amount__c)+ ' - '+String.valueOf(pv.Month__c).left(7);
+                                          if(pv.RecordTypeID == '012U0000000Mbsn' ){                                 
+                                              if(!accWithProcessingVolumes.containsKey(pv.AccountId__c))
+                                                  accWithProcessingVolumes.put(pv.AccountId__c, new List<Processing_Volume__c>());
+                                              if(!uniquekeys.contains(uniqueKey)){
+                                                  accWithProcessingVolumes.get(pv.AccountId__c).add(pv);
+                                                  uniquekeys.add(uniqueKey);  System.debug('Appp==========> '+pv.Application__c+'  pv.Month__c  '+pv.Month__c.month()+'  year'+pv.Month__c.year()+'bank '+pv.Bank__c+'  Amount ' +pv.Amount__c);
+                                                  deductionsAppIdSet.add(String.valueOf(pv.Application__c)+ ' - '+String.valueOf(pv.Bank__c)+ ' - '+String.valueOf(pv.Month__c).left(7)); 
+                                              }
+                                          }
+                                          if(pv.RecordTypeID == '012U0000000Mbsm'){
+                                              if( deductionsAppIdSet.contains(String.valueOf(pv.Application__c)+ ' - '+String.valueOf(pv.Bank__c)+ ' - '+String.valueOf(pv.Month__c).left(7))  )        
+                                                  if(!uniquekeys.contains(uniqueKey)){              
+                                                      accWithProcessingVolumes.get(pv.AccountId__c).add(pv);   
+                                                      uniquekeys.add(uniqueKey);           
+                                                  }                                
+                                          }       
+                                      }
+        return accWithProcessingVolumes;   
+    }
+
+    //Competitor code Base On Recent Sizing Scoring App
+    static Map<Id, List<Competitor__c>> getAccountIdWithCompetitors(Map<Id, Id> oppsWithacc){
+        Set<String> checkCompSet = new Set<String>();
+        Map<Id, List<Competitor__c>> accWithCompetitors = new Map<Id, List<Competitor__c>>();
+        for(Opportunity opp : [SELECT Id, Name, AccountId, Sizing_Scoring_Completion__c,
+                                    (SELECT ID, AccountId__c, Competitor__c, Competitor_Daily_Payment__c,
+                                            Application__c, Amount_deposited__c, Amount_Deposited_Date__c, 
+                                            Funds_transferred_Inter_Company__c  FROM Competitors__r 
+                                            WHERE AccountId__c IN : oppsWithacc.values()) FROM 
+                                            Opportunity WHERE Accountid IN : oppsWithacc.values() 
+                                            AND ID NOT IN:oppsWithacc.keySet()
+                                            ORDER BY Sizing_Scoring_Completion__c DESC NULLS LAST]){
+                                                
+             if(opp.Competitors__r == null || opp.Competitors__r.isEmpty()){  checkCompSet.add(opp.accountid);  }                                 
+    
+            if(opp.Competitors__r.size() > 0 && !checkCompSet.contains(opp.accountid) ){
+                for(Competitor__c oldCompetitor :opp.Competitors__r){
+                    if(!accWithCompetitors.containsKey(oldCompetitor.AccountId__c))
+                        accWithCompetitors.put(oldCompetitor.AccountId__c, new List<Competitor__c>());
+                    accWithCompetitors.get(oldCompetitor.AccountId__c).add(oldCompetitor);
+                    checkCompSet.add(opp.accountid);
+                }
+            }    
+        }
+        return accWithCompetitors;
+    }
+    
+    static Processing_Volume__c[] getProcessingVolumesToInsert(Processing_Volume__c[] oldPvs, Id newOppId){
+        Processing_Volume__c[] processingVolumesToInsert = new Processing_Volume__c[]{};
+        for(Processing_Volume__c pv : oldPvs){
+            Processing_Volume__c newProcessingVolume = new Processing_Volume__c();
+            newProcessingVolume = pv.clone(false,true);
+            newProcessingVolume.Application__c = newOppId;          
+            processingVolumesToInsert.add(newProcessingVolume);
+        }
+        return processingVolumesToInsert;
+
+    }
+    
+    static Competitor__c[] getCompetitorsToInsert(Competitor__c[] oldCompetitors, Id newAppId){
+        Competitor__c[] competitorsToInsert = new Competitor__c[]{};
+        for(Competitor__c oldCompetitor : oldCompetitors){
+            Competitor__c newCompetitor = new Competitor__c();
+            newCompetitor = oldCompetitor.clone(false,true);
+            newCompetitor.Application__c = newAppId;
+            competitorsToInsert.add(newCompetitor);
+        }
+        return competitorsToInsert;
+    }
+/*    public static void copyRelatedLists(Map<Id, Set<Id>> oldNewOppId){
+        system.debug('oldNewOppId===>'+oldNewOppId);
+        List<Processing_Volume__c> processingVolumesToInsert = new List<Processing_Volume__c>();
+        List<Competitor__c> competitorsToInsert = new List<Competitor__c>();
+
+        Set<Id> toDelete = new Set<Id>();
+        Set<Id> competitorToDelete = new Set<Id>();
+
+        for(Id oldId : oldNewOppId.keySet()){
+            toDelete.addAll(oldNewOppId.get(oldId));
+        }
+
+        //Delete existing Processing Volume and Competitor info for existing records
+        Processing_Volume__c[] pvToDelete = [SELECT Id FROM Processing_Volume__c WHERE Application__c IN :toDelete];
+        Competitor__c[] competitorsToDelete = [SELECT Id FROM Competitor__c  WHERE Application__c IN :toDelete];
+        if(pvToDelete.size() != 0) delete pvToDelete;
+        if(competitorsToDelete.size() != 0) delete competitorsToDelete;
+
+        //Map Application With Processing Volumes 
+        Map<Id, List<Processing_Volume__c>> appWithProcessingVolumes = new Map<Id, List<Processing_Volume__c>>();
+        for(Processing_Volume__c pv : [SELECT ID, of_Daily_Negatives__c, Amount__c, Amount_w_Deductions__c, 
+                                              Avg_Daily_Bank_Balance__c, Description__c, Application__c, 
+                                              Avg_Number_of_Monthly_Deposits__c, Month__c, RecordTypeID,
+                                              Bank__c FROM Processing_Volume__c 
+                                              WHERE Application__c IN : oldNewOppId.keyset()]){
+            if(!appWithProcessingVolumes.containsKey(pv.Application__c))
+                appWithProcessingVolumes.put(pv.Application__c, new List<Processing_Volume__c>());
+            
+            appWithProcessingVolumes.get(pv.Application__c).add(pv);
+        }
+
+        //Map Application With Competitors
+        Map<Id, List<Competitor__c>> appWithCompetitors = new Map<Id, List<Competitor__c>>();
+        for(Competitor__c competitor : [SELECT ID, Competitor__c, Competitor_Daily_Payment__c,
+                                              Application__c, Amount_deposited__c, 
+                                              Amount_Deposited_Date__c, 
+                                              Funds_transferred_Inter_Company__c 
+                                              FROM Competitor__c 
+                                              WHERE Application__c IN : oldNewOppId.keySet()]){
+            if(!appWithCompetitors.containsKey(competitor.Application__c))
+                appWithCompetitors.put(competitor.Application__c, new List<Competitor__c>());
+            
+            appWithCompetitors.get(competitor.Application__c).add(competitor);
+        }
+
+        //Create New PV and Competitor
+        for(Id oldAppId : oldNewOppId.keySet()){
+
+            for(Id newAppId : oldNewOppId.get(oldAppId)){
+                //Clone Processing Volumes
+                if(appWithProcessingVolumes.containsKey(oldAppId)){
+                    for(Processing_Volume__c oldProcessingVolume : appWithProcessingVolumes.get(oldAppId)){
+                        Processing_Volume__c newProcessingVolume = new Processing_Volume__c();
+                        newProcessingVolume = oldProcessingVolume.clone(false,true);
+                        newProcessingVolume.Application__c = newAppId;
+                        processingVolumesToInsert.add(newProcessingVolume);
+                    }
+                }
+
+                //Clone Competitors
+                if(appWithCompetitors.containsKey(oldAppId)){
+                    for(Competitor__c oldCompetitor : appWithCompetitors.get(oldAppId)){
+                        Competitor__c newCompetitor = new Competitor__c();
+                        newCompetitor = oldCompetitor.clone(false,true);
+                        newCompetitor.Application__c = newAppId;
+                        competitorsToInsert.add(newCompetitor);
+                    }
+                }
+            }
+        }
+        
+        if(processingVolumesToInsert.size() != 0) insert processingVolumesToInsert;  
+        if(competitorsToInsert.size() != 0) insert competitorsToInsert;  
+    }  */
+    
+}
