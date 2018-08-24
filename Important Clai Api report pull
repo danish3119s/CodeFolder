@@ -1,0 +1,195 @@
+public static Lead getLead(Opportunity opp){
+        Lead lead = new Lead();
+        if(opp.Primary_Owner__c != null && String.isNotBlank(opp.Primary_Owner__c.subStringBefore(' ').trim())) lead.FirstName = opp.Primary_Owner__c.subStringBefore(' ').trim();
+        if(opp.Primary_Owner__c != null && String.isNotBlank(opp.Primary_Owner__c.subStringAfter(' ').trim())) lead.LastName = opp.Primary_Owner__c.subStringAfter(' ').trim();
+        else lead.LastName = 'UnKnown';
+
+        //lead.Company = opp.Name;
+        lead.Company = opp.Account_Name__c; //RP : 00110768
+        if(opp.Paid_Off_Percentage__c >= 65)    lead.Eligible_For_Renewal__c = TRUE;
+        // lead.Ownership__c = opp.Ownership__c; /* Modified for opportunity field cleanup - 20170914*/
+        if(String.isNotBlank(opp.Agent_Broker_Account_Type__c) && opp.Agent_Broker_Account_Type__c == 'Broker'&&
+             String.isNotBlank(opp.Agent_Broker_Account_Status__c) && opp.Agent_Broker_Account_Status__c != 'InActive')
+            lead.Agent_Broker__c = opp.Agent_Broker__c;
+        else
+            lead.Agent_Broker__c = Label.Default_Broker_Agent;
+        
+        lead.Phone = opp.Account_s_Phone__c;
+        if(String.isNotBlank(opp.Primary_Owner_Email__c))
+            lead.Email = opp.Primary_Owner_Email__c;
+        else if(String.isNotBlank(opp.zPrimaryOwnerEmail__c))
+            lead.Email = opp.zPrimaryOwnerEmail__c;    
+        lead.Application_Type__c = 'Outside Bid';
+        lead = getLeadFields(lead, opp);
+        if(String.isNotBlank(opp.LeadSource))   lead.LeadSource = opp.LeadSource;
+        else{
+            if(opp.Agent_Broker_Account_Name__c == 'Tiger Funding') lead.LeadSource = 'Tiger Funding';
+            else    lead.LeadSource = 'Broker Submission';
+        }
+        return lead;
+    }
+
+
+      public void finish(Database.BatchableContext bC) {
+        DateTime fixDateAndTime=Datetime.newInstance(System.today(),Time.newInstance(19,0,0,0));
+        DateTime nextBusinessDate=BusinessHours.nextStartDate(System.Label.BusinessHoursId, fixDateAndTime);
+        Integer diff=(Integer)((nextBusinessDate.getTime()-System.now().getTime())/1000/60);
+        diff= diff+(7*60)+1;
+        BatchACHPaymentKCF s = new BatchACHPaymentKCF(); 
+        CronTrigger[] jobKCF = [SELECT Id, CronJobDetail.Id, CronJobDetail.Name, CronJobDetail.JobType,NextFireTime 
+                                      FROM CronTrigger Where CronJobDetail.Name Like 'BatchACHPaymentKCF' AND NextFireTime > :System.now()];
+        if(jobKCF.size()==0)
+            System.scheduleBatch(s, 'BatchACHPaymentKCF',diff,1);
+     }  
+
+
+
+     =========================================================================================================
+     public class PotentialDupePullClearReports {
+    public static List<Sobject> listOfNewSobject ;
+    public PotentialDupePullClearReports(){
+        listOfNewSobject = new List<Sobject>();
+    }
+    @future
+    public static void copyReports(List<String> oppIds){//at this point we have filter app which are PD and recently updated to BROKER NEG.    
+        System.debug('Hi Potential##');
+        Map<String,List<String>> appWithQualifyingApp = getMapOfQualifyingApp(oppIds);
+        System.debug('Hi Potential##'+appWithQualifyingApp);
+        Map<Id,Clear_API__c> clearRec = new Map<Id,Clear_API__c>(getClearApi(appWithQualifyingApp.keySet()));
+        System.debug('Hi Clear##'+clearRec);
+        Map<String,List<Clear_API__c>> appWithClear = getClearWithApp(clearRec.values(),appWithQualifyingApp.keySet());
+        Map<String,List<Clear_API__c>> oldClearIdWithNewClear = createClearRecords(appWithQualifyingApp,appWithClear);
+        System.debug(appWithClear);
+        System.debug(oldClearIdWithNewClear);
+        System.debug('Hi Potential##');
+        /* Fetch all clear records */
+    List<Verification_Checklist__c> verChk = getClearRecords('Verification_Checklist__c',clearRec.keySet());
+    List<Bankruptcy__c> bankruptcy = getClearRecords('Bankruptcy__c',clearRec.keySet());
+        collectAndCreateClearRecords(bankruptcy,'Bankruptcy__c',oldClearIdWithNewClear);
+    List<UCC__c> ucc = getClearRecords('UCC__c',clearRec.keySet());
+    List<Criminal_Record__c> crimRecords = getClearRecords('Criminal_Record__c',clearRec.keySet());
+    List<Business_Tax_Lien__c> businessTaxLien = getClearRecords('Business_Tax_Lien__c',clearRec.keySet());
+    List<Foreclosure__c> foreclosure = getClearRecords('Foreclosure__c',clearRec.keySet());
+    List<Shareholder_Section__c> shareHoldSec = getClearRecords('Shareholder_Section__c',clearRec.keySet());
+    List<Address_Section__c> addSec = getClearRecords('Address_Section__c',clearRec.keySet());
+    List<Arrest_Record__c> arrestRec = getClearRecords('Arrest_Record__c',clearRec.keySet());
+    List<Corporate_Record__c> corporateRec = getClearRecords('Corporate_Record__c',clearRec.keySet());
+    List<Email_Section__c> emailSec = getClearRecords('Email_Section__c',clearRec.keySet());
+    List<Executive_Affiliation_Section__c> exeAffSec = getClearRecords('Executive_Affiliation_Section__c',clearRec.keySet());
+    List<Military_Section__c> milSec = getClearRecords('Military_Section__c',clearRec.keySet());
+    List<Quick_Analysis__c> quickAnalysisSec = getClearRecords('Quick_Analysis__c',clearRec.keySet());
+    List<Real_Property__c> realProp = getClearRecords('Real_Property__c',clearRec.keySet());
+    List<Watercraft_Record__c> waterRec = getClearRecords('Watercraft_Record__c',clearRec.keySet());
+    List<Work_Affiliation__c> workAff = getClearRecords('Work_Affiliation__c',clearRec.keySet());
+    List<SSN_Address_Fraud__c> ssnAdd = getClearRecords('SSN_Address_Fraud__c',clearRec.keySet());
+    List<Neighbor_Record__c> neignborRec = getClearRecords('Neighbor_Record__c',clearRec.keySet());
+    List<Relatives__c> relative = getClearRecords('Relatives__c',clearRec.keySet());
+    List<Death_Record__c> deathRec = getClearRecords('Death_Record__c',clearRec.keySet());
+    List<Excluded_Party_Section__c> exPartySec = getClearRecords('Excluded_Party_Section__c',clearRec.keySet());
+    List<License_Section__c> licSec = getClearRecords('License_Section__c',clearRec.keySet());
+    List<Driver_License__c> driverLic = getClearRecords('Driver_License__c',clearRec.keySet());
+    List<Divorce__c> divorce = getClearRecords('Divorce__c',clearRec.keySet());
+    List<Vehicle_Section__c> vehicleSec = getClearRecords('Vehicle_Section__c',clearRec.keySet());
+    List<Subject_Section__c> subSec = getClearRecords('Subject_Section__c',clearRec.keySet());
+    List<Associate_Record__c> associateRec = getClearRecords('Associate_Record__c',clearRec.keySet());
+    List<Associate_Analytics_Chart_Record__c> associateAnRec = getClearRecords('Associate_Analytics_Chart_Record__c',clearRec.keySet());
+    List<Infraction_Record__c> infractionRec = getClearRecords('Infraction_Record__c',clearRec.keySet());
+    List<Aircraft_Record__c> aircraftRec = getClearRecords('Aircraft_Record__c',clearRec.keySet());
+    List<World_Base__c> worldBaseRec = getClearRecords('World_Base__c',clearRec.keySet());
+    List<Phone_Number__c> phoneRec = getClearRecords('Phone_Number__c',clearRec.keySet());
+    List<Dnb_Clear_Report_Section__c> dnbClearSec = getClearRecords('Dnb_Clear_Report_Section__c',clearRec.keySet());
+    List<People_Same_Address_Section__c> peopleAddSec = getClearRecords('People_Same_Address_Section__c',clearRec.keySet());
+    List<Utility_Section__c> utilitySec = getClearRecords('Utility_Section__c',clearRec.keySet());
+    List<Business_Same_Address_Record__c> businessAddRec = getClearRecords('Business_Same_Address_Record__c',clearRec.keySet());
+    List<Business_Profile_Record__c> businessProfRec = getClearRecords('Business_Profile_Record__c',clearRec.keySet());
+    List<Political_Donor__c> politicalRec = getClearRecords('Political_Donor__c',clearRec.keySet());
+    List<Voter_Registration_Section__c> voterRegSec = getClearRecords('Voter_Registration_Section__c',clearRec.keySet());
+    List<Drivers_At_Subject_Address_Section__c> driverSubSec = getClearRecords('Drivers_At_Subject_Address_Section__c',clearRec.keySet());
+        /*--Fetch end---*/    
+     }
+    
+    public static List<sobject> getClearRecords(String objectName,set<Id> clearId){
+        List<sobject> sobj= new List<sobject>();
+        String queryClear = 'SELECT';
+        Map<String, Schema.SObjectField> objectFields = Schema.getGlobalDescribe().get(objectName).getDescribe().fields.getMap();
+        for(String s : objectFields.keySet()) {
+            queryClear += ' ' + s + ',';
+        }
+        queryClear = queryClear.subString(0,queryClear.Length()-1);
+        queryClear +=' from '+objectName +' Where Clear_API__c in :clearId';
+        return database.query(queryClear);
+    }
+    
+    public static List<Clear_API__c> getClearApi(set<String> opIds){
+        String objectName = 'Clear_API__c';
+        String queryClear = 'SELECT';
+        Map<String, Schema.SObjectField> objectFields = Schema.getGlobalDescribe().get(objectName).getDescribe().fields.getMap();
+        for(String s : objectFields.keySet()) {
+            queryClear += ' ' + s + ',';
+        }
+        queryClear = queryClear.subString(0,queryClear.Length()-1);
+        queryClear +=' from Clear_API__c Where Application__c in :opIds';
+        System.debug(queryClear);
+        return database.query(queryClear);
+    }
+    
+    public static Map<String,List<String>> getMapOfQualifyingApp(List<String> appString){
+        Map<String,List<String>> oppIdString = new Map<String,List<String>>();
+        for(String st:appString){
+            List<String> secondSplit = st.split(',');
+            List<String> opid = new List<String>();
+            for(String ts:secondSplit[1].split(' ')){
+                opid.add(ts);
+            }
+            oppIdString.put(secondSplit[0],opid);
+        }
+        return oppIdString;
+    }
+    
+    public static Map<String,List<Clear_API__c>> getClearWithApp(List<Clear_API__c> clearList,Set<String> opid){
+        Map<String,List<Clear_API__c>> mapOfOpIdAndClear = new Map<String,List<Clear_API__c>>();
+        for(String op:opid){ 
+            for(Clear_API__c c:clearList){
+                if(c.Application__c==op){
+                    if(!mapOfOpIdAndClear.containsKey(c.Application__c))
+                        mapOfOpIdAndClear.put(c.Application__c, new List<Clear_API__c>());
+                    mapOfOpIdAndClear.get(c.Application__c).add(c);
+                }
+            }
+        }
+        return mapOfOpIdAndClear;
+    }
+    
+    public static Map<String,List<Clear_API__c>> createClearRecords(Map<String,List<String>> appWithQualifyingApp,Map<String,List<Clear_API__c>> appWithClear){
+        List<Clear_API__c> listClear = new List<Clear_API__c>();
+        Map<String,List<Clear_API__c>> newClearMapWithOldId = new Map<String,List<Clear_API__c>>();
+    for(String app:appWithQualifyingApp.keySet()){
+      for(String relApp:appWithQualifyingApp.get(app)){
+        for(Clear_API__c cl:appWithClear.get(app)){
+          Clear_API__c nClear = cl;
+          nClear.Application__c = cl.Application__c;
+          nClear.id=null;
+          if(!newClearMapWithOldId.containsKey(cl.id))
+                        newClearMapWithOldId.put(cl.id, new List<Clear_API__c>());
+                    newClearMapWithOldId.get(cl.id).add(nClear);
+                    listClear.add(nClear);
+        }
+      }
+    }
+    if(listClear.size() > 0)
+    insert listClear;
+    return newClearMapWithOldId;
+    }
+    
+    public static void collectAndCreateClearRecords(List<Sobject> objectList,String clearObjectName,Map<String,List<Clear_API__c>> oldClearIdWithNewClear){
+        for(sObject sb:objectList){
+            String key = (String)sb.get('Clear_API__c');
+            sObject sObj = Schema.getGlobalDescribe().get(clearObjectName).newSObject();
+            sObj = sb;
+            sObj.put('id',null);
+            sObj.put('Clear_API__c',oldClearIdWithNewClear.get(key));
+            listOfNewSobject.add(sObj);
+        }
+        insert listOfNewSobject;
+  }
+}
